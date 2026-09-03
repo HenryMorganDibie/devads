@@ -62,13 +62,35 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
     const { email, password } = parsed.data;
 
-    const user = await prisma.user.findUnique({ where: { email }, include: { developerProfile: true } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { developerProfile: true, advertiserMemberships: true },
+    });
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
       return reply.status(401).send({ error: "invalid_credentials" });
     }
 
     const token = signSession({ sub: user.id, role: user.role }, SESSION_SECRET);
-    return reply.send({ token, userId: user.id, developerId: user.developerProfile?.id ?? null });
+    return reply.send({
+      token,
+      userId: user.id,
+      developerId: user.developerProfile?.id ?? null,
+      advertiserId: user.advertiserMemberships[0]?.advertiserId ?? null,
+    });
+  });
+
+  app.post("/api/v1/auth/admin-login", async (req, reply) => {
+    const parsed = LoginSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
+    const { email, password } = parsed.data;
+
+    const admin = await prisma.adminUser.findUnique({ where: { email } });
+    if (!admin || !verifyPassword(password, admin.passwordHash)) {
+      return reply.status(401).send({ error: "invalid_credentials" });
+    }
+
+    const token = signSession({ sub: admin.id, role: "ADMIN" }, SESSION_SECRET);
+    return reply.send({ token, adminId: admin.id });
   });
 
   // --- Device-pairing flow used by the VS Code extension --------------------
