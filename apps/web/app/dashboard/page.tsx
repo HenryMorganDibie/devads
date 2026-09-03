@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet, apiPatch, clearSession, formatCents, loadSession } from "../../lib/api";
+import { apiGet, apiPatch, apiPost, clearSession, formatCents, loadSession } from "../../lib/api";
 
 interface Earnings {
   currency: string;
@@ -23,6 +23,27 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [adsEnabled, setAdsEnabled] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutMessage, setPayoutMessage] = useState<string | null>(null);
+
+  async function requestPayout() {
+    const session = loadSession();
+    if (!session?.developerId) return;
+    setPayoutLoading(true);
+    setPayoutMessage(null);
+    const { ok, data } = await apiPost<{ status: string; error?: string }>("/api/v1/earnings/payout", {
+      developerId: session.developerId,
+    });
+    setPayoutLoading(false);
+    if (!ok) {
+      setPayoutMessage(data.error === "below_payout_threshold" ? "Below the minimum payout threshold." : "Payout request failed.");
+      return;
+    }
+    setPayoutMessage(`Payout ${data.status.toLowerCase()}.`);
+    apiGet<Earnings>(`/api/v1/earnings?developerId=${session.developerId}`).then(({ ok, data }) => {
+      if (ok) setEarnings(data);
+    });
+  }
 
   useEffect(() => {
     const session = loadSession();
@@ -68,10 +89,27 @@ export default function DashboardPage() {
         <Stat label="Lifetime" value={formatCents(earnings?.lifetime ?? 0, earnings?.currency)} />
       </section>
 
-      <p className="text-xs text-muted mb-10">
+      <p className="text-xs text-muted mb-4">
         Earnings reflect qualified ad views only and are not guaranteed. Balances become payable once
         they reach the minimum payout threshold ({formatCents(earnings?.payoutThresholdCents ?? 0)}).
       </p>
+
+      {earnings && (
+        <div className="mb-10 flex items-center gap-3">
+          <button
+            className="btn-primary text-sm"
+            disabled={
+              payoutLoading || earnings.availableBalanceCents < earnings.payoutThresholdCents
+            }
+            onClick={requestPayout}
+          >
+            {payoutLoading
+              ? "Requesting..."
+              : `Withdraw ${formatCents(earnings.availableBalanceCents, earnings.currency)}`}
+          </button>
+          {payoutMessage && <span className="text-xs text-muted">{payoutMessage}</span>}
+        </div>
+      )}
 
       <section className="card p-6 mb-10">
         <h2 className="font-medium mb-4">Activity</h2>

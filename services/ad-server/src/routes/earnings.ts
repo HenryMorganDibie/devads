@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@devads/database";
+import { createPayoutProvider, money } from "@devads/shared";
+
+const payoutProvider = createPayoutProvider(process.env.PAYOUT_PROVIDER, process.env.STRIPE_SECRET_KEY);
 
 const QuerySchema = z.object({ developerId: z.string().min(1) });
 
@@ -82,5 +85,61 @@ export async function registerEarningsRoutes(app: FastifyInstance) {
         processedAt: p.processedAt,
       })),
     });
+  });
+
+  /**
+   * POST /api/v1/earnings/payout
+   *
+   * Requests a payout of the developer's full available balance. The
+   * server recomputes the available balance itself (lifetime ledger sum
+   * minus already-PAID payouts) rather than trusting anything from the
+   * client, enforces the minimum payout threshold, and only marks the
+   * Payout row PAID after the PayoutProvider confirms success -- a failed
+   * provider call leaves it PENDING/FAILED instead of silently paying out.
+   */
+  app.post("/api/v1/earnings/payout", async (req, reply) => {
+    const parsed = QuerySchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
+    const { developerId } = parsed.data;
+
+    const developer = await prisma.developerProfile.findUnique({ where: { id: developerId } });
+    if (!developer) return reply.status(404).send({ error: "developer_not_found" });
+
+    const [lifetime, paidOut] = await Promise.all([
+      prisma.developerEarningsLedger.aggregate({ where: { developerId }, _sum: { amountCents: true } }),
+      prisma.payout.aggregate({ where: { developerId, status: "PAID" }, _sum: { amountCents: true } }),
+    ]);
+    const availableCents = (lifetime._sum.amountCents ?? 0) - (paidOut._sum.amountCents ?? 0);
+
+    if (availableCents < developer.payoutThresholdCents) {
+      return reply.status(400).send({ error: "below_payout_threshold", availableCents, thresholdCents: developer.payoutThresholdCents });
+    }
+
+    const payout = await prisma.payout.create({
+      data: {
+        developerId,
+        amountCents: availableCents,
+        currency: developer.currency,
+        status: "PENDING",
+        provider: payoutProvider.kind,
+      },
+    });
+
+    const result = await payoutProvider.requestPayout({
+      developerId,
+      amount: money(availableCents, developer.currency),
+    });
+
+    const updated = await prisma.payout.update({
+      where: { id: payout.id },
+      data: {
+        status: result.status,
+        providerRef: result.providerRef || null,
+        failureReason: result.failureReason,
+        processedAt: result.status === "PAID" ? new Date() : null,
+      },
+    });
+
+    return reply.send(updated);
   });
 }
