@@ -374,6 +374,28 @@ model ClientInstallation {
   @@map("client_installations")
 }
 
+enum DeviceAuthStatus {
+  PENDING
+  APPROVED
+  EXPIRED
+}
+
+model DeviceAuthRequest {
+  id           String           @id @default(cuid())
+  deviceCode   String           @unique
+  userCode     String           @unique
+  status       DeviceAuthStatus @default(PENDING)
+  userId       String?
+  platform     String?
+  extensionVersion String?
+  expiresAt    DateTime
+  createdAt    DateTime         @default(now())
+  approvedAt   DateTime?
+
+  @@index([status])
+  @@map("device_auth_requests")
+}
+
 model PrivacyConsent {
   id          String   @id @default(cuid())
   userId      String
