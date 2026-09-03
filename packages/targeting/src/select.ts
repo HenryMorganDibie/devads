@@ -1,6 +1,6 @@
-import { isFrequencyCapped } from "./frequencyCap";
-import { applyTargeting } from "./matching";
-import { hasBudgetRemaining } from "./budget";
+import { isFrequencyCapped } from "./frequencyCap.js";
+import { applyTargeting } from "./matching.js";
+import { hasBudgetRemaining } from "./budget.js";
 import type {
   BudgetUsage,
   CampaignCandidate,

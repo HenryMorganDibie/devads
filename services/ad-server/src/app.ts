@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { registerAdsRoutes } from "./routes/ads.js";
 import { registerEventsRoutes } from "./routes/events.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerEarningsRoutes } from "./routes/earnings.js";
+import { registerCampaignsRoutes } from "./routes/campaigns.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: false });
@@ -11,6 +14,9 @@ export async function buildApp() {
 
   await registerAdsRoutes(app);
   await registerEventsRoutes(app);
+  await registerAuthRoutes(app);
+  await registerEarningsRoutes(app);
+  await registerCampaignsRoutes(app);
 
   return app;
 }
