@@ -32,7 +32,11 @@ export async function registerAdsRoutes(app: FastifyInstance) {
     }
 
     const prefs = {
-      enabled: true, // preferences.enabled is enforced client-side too; server trusts the stored profile below
+      // The extension already gates on its own local setting, but the
+      // server independently re-checks the persisted preference so a
+      // disabled developer never receives an ad even if a client is
+      // compromised, buggy, or simply out of date.
+      enabled: developer.adsEnabled,
       categoriesOptOut: developer.preferredCategories.length > 0 ? [] : [],
       frequencyCapOverride: developer.frequencyCapOverride ?? undefined,
     };

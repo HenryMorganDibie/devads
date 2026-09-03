@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet, clearSession, formatCents, loadSession } from "../../lib/api";
+import { apiGet, apiPatch, clearSession, formatCents, loadSession } from "../../lib/api";
 
 interface Earnings {
   currency: string;
@@ -22,6 +22,7 @@ export default function DashboardPage() {
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [loading, setLoading] = useState(true);
   const [adsEnabled, setAdsEnabled] = useState(true);
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
     const session = loadSession();
@@ -32,6 +33,9 @@ export default function DashboardPage() {
     apiGet<Earnings>(`/api/v1/earnings?developerId=${session.developerId}`).then(({ ok, data }) => {
       if (ok) setEarnings(data);
       setLoading(false);
+    });
+    apiGet<{ adsEnabled: boolean }>(`/api/v1/developers/${session.developerId}/preferences`).then(({ ok, data }) => {
+      if (ok) setAdsEnabled(data.adsEnabled);
     });
   }, [router]);
 
@@ -115,7 +119,17 @@ export default function DashboardPage() {
           <input
             type="checkbox"
             checked={adsEnabled}
-            onChange={(e) => setAdsEnabled(e.target.checked)}
+            disabled={savingPrefs}
+            onChange={async (e) => {
+              const next = e.target.checked;
+              setAdsEnabled(next);
+              setSavingPrefs(true);
+              const session = loadSession();
+              if (session?.developerId) {
+                await apiPatch(`/api/v1/developers/${session.developerId}/preferences`, { adsEnabled: next });
+              }
+              setSavingPrefs(false);
+            }}
             className="h-4 w-4"
           />
           Enable DevAds in VS Code

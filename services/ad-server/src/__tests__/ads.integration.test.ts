@@ -99,7 +99,7 @@ beforeEach(async () => {
   });
   await prisma.developerProfile.upsert({
     where: { id: devId },
-    update: {},
+    update: { adsEnabled: true },
     create: { id: devId, userId },
   });
 });
@@ -115,6 +115,24 @@ describe("ad-server integration", () => {
     expect(res.statusCode).toBe(200);
     // language "rust" doesn't match targeted "typescript" -> no eligible campaign
     expect(res.json().ad).toBeNull();
+  });
+
+  it("never selects an ad once the developer has disabled DevAds, even if a stale/malicious client still asks", async () => {
+    if (!dbAvailable) return;
+
+    await prisma.developerProfile.update({ where: { id: devId }, data: { adsEnabled: false } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ads/select",
+      payload: {
+        context: { developerId: devId, command: "npm", language: "typescript", elapsedSeconds: 30 },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ad).toBeNull();
+
+    // restore for subsequent tests
+    await prisma.developerProfile.update({ where: { id: devId }, data: { adsEnabled: true } });
   });
 
   it("selects the targeted campaign, records an impression, and pays out on a qualified view", async () => {

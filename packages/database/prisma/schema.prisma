@@ -89,6 +89,7 @@ model DeveloperProfile {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   displayName       String?
   country           String?
+  adsEnabled        Boolean  @default(true)
   preferredCategories String[] @default([])
   frequencyCapOverride Int?
   payoutThresholdCents Int    @default(2000)

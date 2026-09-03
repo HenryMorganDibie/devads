@@ -45,6 +45,16 @@ export async function apiGet<T>(path: string): Promise<{ ok: boolean; status: nu
   return { ok: res.ok, status: res.status, data };
 }
 
+export async function apiPatch<T>(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: T }> {
+  const res = await fetch(`${AD_SERVER_URL}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as T;
+  return { ok: res.ok, status: res.status, data };
+}
+
 export function formatCents(cents: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }
