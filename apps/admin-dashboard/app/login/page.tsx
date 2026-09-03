@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, saveAdminId } from "../../lib/api";
+import { apiPost, saveAdminSession } from "../../lib/api";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,13 +15,13 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { ok, data } = await apiPost<{ adminId: string }>("/api/v1/auth/admin-login", { email, password });
+    const { ok, data } = await apiPost<{ adminId: string; token: string }>("/api/v1/auth/admin-login", { email, password });
     setLoading(false);
     if (!ok) {
       setError("Invalid credentials.");
       return;
     }
-    saveAdminId(data.adminId);
+    saveAdminSession({ adminId: data.adminId, token: data.token });
     router.push("/campaigns");
   }
 

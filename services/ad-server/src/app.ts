@@ -6,10 +6,12 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerEarningsRoutes } from "./routes/earnings.js";
 import { registerCampaignsRoutes } from "./routes/campaigns.js";
 import { registerDeveloperRoutes } from "./routes/developers.js";
+import { attachSession } from "./lib/authGuard.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true });
+  app.addHook("onRequest", attachSession);
 
   app.get("/health", async () => ({ status: "ok" }));
 

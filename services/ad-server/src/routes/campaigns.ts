@@ -4,6 +4,7 @@ import { prisma } from "@devads/database";
 import { CreateCampaignSchema } from "@devads/shared";
 import { hashPassword } from "@devads/auth";
 import { config } from "../lib/config.js";
+import { requireAdmin } from "../lib/authGuard.js";
 
 const AdvertiserSignupSchema = z.object({
   email: z.string().email(),
@@ -167,7 +168,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
   });
 
   // --- Admin approval queue --------------------------------------------------
-  app.get("/api/v1/admin/campaigns", async (req, reply) => {
+  app.get("/api/v1/admin/campaigns", { preHandler: requireAdmin }, async (req, reply) => {
     const query = z.object({ status: z.string().optional() }).safeParse(req.query);
     const status = query.success ? query.data.status : undefined;
     const campaigns = await prisma.campaign.findMany({
@@ -178,7 +179,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(campaigns);
   });
 
-  app.post("/api/v1/admin/campaigns/:id/approve", async (req, reply) => {
+  app.post("/api/v1/admin/campaigns/:id/approve", { preHandler: requireAdmin }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     if (!params.success) return reply.status(400).send({ error: "invalid_request" });
     const campaign = await prisma.campaign.findUnique({ where: { id: params.data.id } });
@@ -192,7 +193,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/api/v1/admin/campaigns/:id/reject", async (req, reply) => {
+  app.post("/api/v1/admin/campaigns/:id/reject", { preHandler: requireAdmin }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     const body = RejectBody.safeParse(req.body);
     if (!params.success || !body.success) return reply.status(400).send({ error: "invalid_request" });
@@ -207,7 +208,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/api/v1/admin/campaigns/:id/pause", async (req, reply) => {
+  app.post("/api/v1/admin/campaigns/:id/pause", { preHandler: requireAdmin }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     if (!params.success) return reply.status(400).send({ error: "invalid_request" });
     const campaign = await prisma.campaign.findUnique({ where: { id: params.data.id } });
@@ -218,7 +219,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/api/v1/admin/advertisers/:id/suspend", async (req, reply) => {
+  app.post("/api/v1/admin/advertisers/:id/suspend", { preHandler: requireAdmin }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     if (!params.success) return reply.status(400).send({ error: "invalid_request" });
     const advertiser = await prisma.advertiser.findUnique({ where: { id: params.data.id } });
@@ -229,7 +230,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
   });
 
   // --- Admin platform overview -----------------------------------------------
-  app.get("/api/v1/admin/overview", async (_req, reply) => {
+  app.get("/api/v1/admin/overview", { preHandler: requireAdmin }, async (_req, reply) => {
     const [developers, advertisers, campaigns, impressions, spend, earnings, pendingApprovals, openFraudFlags] =
       await Promise.all([
         prisma.developerProfile.count(),

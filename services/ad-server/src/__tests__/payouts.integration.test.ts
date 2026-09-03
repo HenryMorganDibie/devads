@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@devads/database";
+import { signSession } from "@devads/auth";
 import { buildApp } from "../app.js";
+
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let dbAvailable = true;
@@ -24,6 +27,9 @@ afterAll(async () => {
 
 const userId = "test-payout-user";
 const devId = "test-payout-developer";
+const authHeader = () => ({
+  authorization: `Bearer ${signSession({ sub: userId, role: "DEVELOPER" }, SESSION_SECRET)}`,
+});
 
 beforeEach(async () => {
   if (!dbAvailable) return;
@@ -49,7 +55,7 @@ describe("payouts", () => {
       data: { developerId: devId, impressionEventId: randomUUID(), amountCents: 500, description: "test" },
     });
 
-    const res = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", payload: { developerId: devId } });
+    const res = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("below_payout_threshold");
   });
@@ -61,7 +67,7 @@ describe("payouts", () => {
       data: { developerId: devId, impressionEventId: randomUUID(), amountCents: 2500, description: "test" },
     });
 
-    const res = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", payload: { developerId: devId } });
+    const res = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.amountCents).toBe(2500);
@@ -78,9 +84,9 @@ describe("payouts", () => {
     await prisma.developerEarningsLedger.create({
       data: { developerId: devId, impressionEventId: randomUUID(), amountCents: 2500, description: "test" },
     });
-    await app.inject({ method: "POST", url: "/api/v1/earnings/payout", payload: { developerId: devId } });
+    await app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } });
 
-    const second = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", payload: { developerId: devId } });
+    const second = await app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } });
     expect(second.statusCode).toBe(400);
     expect(second.json().error).toBe("below_payout_threshold");
   });

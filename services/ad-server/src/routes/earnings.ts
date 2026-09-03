@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@devads/database";
 import { createPayoutProvider, money } from "@devads/shared";
+import { requireSession } from "../lib/authGuard.js";
 
 const payoutProvider = createPayoutProvider(process.env.PAYOUT_PROVIDER, process.env.STRIPE_SECRET_KEY);
 
@@ -25,13 +26,15 @@ function startOfUtcMonth(now: Date): Date {
  * lifetime view the developer dashboard shows. No writes happen here.
  */
 export async function registerEarningsRoutes(app: FastifyInstance) {
-  app.get("/api/v1/earnings", async (req, reply) => {
+
+  app.get("/api/v1/earnings", { preHandler: requireSession }, async (req, reply) => {
     const parsed = QuerySchema.safeParse(req.query);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
     const { developerId } = parsed.data;
 
     const developer = await prisma.developerProfile.findUnique({ where: { id: developerId } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found" });
+    if (developer.userId !== req.session!.sub) return reply.status(403).send({ error: "forbidden" });
 
     const now = new Date();
     const todayStart = startOfUtc(0, now);
@@ -97,13 +100,14 @@ export async function registerEarningsRoutes(app: FastifyInstance) {
    * Payout row PAID after the PayoutProvider confirms success -- a failed
    * provider call leaves it PENDING/FAILED instead of silently paying out.
    */
-  app.post("/api/v1/earnings/payout", async (req, reply) => {
+  app.post("/api/v1/earnings/payout", { preHandler: requireSession }, async (req, reply) => {
     const parsed = QuerySchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
     const { developerId } = parsed.data;
 
     const developer = await prisma.developerProfile.findUnique({ where: { id: developerId } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found" });
+    if (developer.userId !== req.session!.sub) return reply.status(403).send({ error: "forbidden" });
 
     const [lifetime, paidOut] = await Promise.all([
       prisma.developerEarningsLedger.aggregate({ where: { developerId }, _sum: { amountCents: true } }),

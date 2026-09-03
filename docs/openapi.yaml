@@ -1,0 +1,299 @@
+openapi: 3.0.3
+info:
+  title: DevAds Ad Server API
+  version: 0.1.0
+  description: >
+    Server-authoritative API for ad selection, event tracking, earnings,
+    campaign management, and admin operations. See api.md for design notes
+    and the current authorization scope.
+servers:
+  - url: http://localhost:4000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200": { description: OK }
+
+  /api/v1/auth/signup:
+    post:
+      summary: Developer or advertiser account signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [DEVELOPER, ADVERTISER, ADMIN], default: DEVELOPER }
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  userId: { type: string }
+                  developerId: { type: string, nullable: true }
+        "409": { description: Email already registered }
+
+  /api/v1/auth/login:
+    post:
+      summary: Login (developer or advertiser)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: Session token + resolved developerId/advertiserId }
+        "401": { description: Invalid credentials }
+
+  /api/v1/auth/admin-login:
+    post:
+      summary: Admin login
+      responses:
+        "200": { description: Admin session token }
+        "401": { description: Invalid credentials }
+
+  /api/v1/auth/device/start:
+    post:
+      summary: Start a VS Code device-pairing sign-in flow
+      responses:
+        "200": { description: deviceCode, userCode, verificationUrl, expiry, poll interval }
+
+  /api/v1/auth/device/poll:
+    post:
+      summary: Poll for device-pairing approval
+      responses:
+        "200": { description: "status: pending | approved | expired, token + developerId when approved" }
+
+  /api/v1/auth/device/approve:
+    post:
+      summary: Approve a pending device code (called by the web app after the developer signs in)
+      responses:
+        "200": { description: OK }
+        "400": { description: Invalid or expired code }
+
+  /api/v1/ads/select:
+    post:
+      summary: Server-authoritative ad selection for the current context
+      description: >
+        Re-validates eligibility server-side regardless of client state.
+        Creates the impression + IMPRESSION event itself when a candidate
+        wins. Never requires authentication (called by an unauthenticated
+        extension flow using a stored developerId) -- see api.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [context]
+              properties:
+                context:
+                  type: object
+                  required: [developerId, elapsedSeconds]
+                  properties:
+                    developerId: { type: string }
+                    installationId: { type: string }
+                    command: { type: string, maxLength: 64 }
+                    language: { type: string }
+                    framework: { type: string }
+                    runtime: { type: string }
+                    platform: { type: string }
+                    country: { type: string }
+                    elapsedSeconds: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: An ad candidate, or null if none is eligible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ad:
+                    nullable: true
+                    type: object
+                    properties:
+                      impressionId: { type: string }
+                      campaignId: { type: string }
+                      creativeId: { type: string }
+                      type: { type: string, enum: [IMAGE, VIDEO] }
+                      headline: { type: string }
+                      body: { type: string, nullable: true }
+                      ctaLabel: { type: string }
+                      ctaUrl: { type: string }
+                      eventId: { type: string }
+
+  /api/v1/events:
+    post:
+      summary: Report a CLICK, DISMISS, or VIEW_COMPLETE event (idempotent via eventId)
+      description: >
+        IMPRESSION events cannot be reported here -- only created
+        server-side by /api/v1/ads/select. A qualifying VIEW_COMPLETE
+        (viewDurationMs over the configured minimum) writes a developer
+        earnings ledger entry and campaign spend entry, exactly once per
+        impression.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId, type, campaignId, developerId]
+              properties:
+                eventId: { type: string }
+                type: { type: string, enum: [CLICK, DISMISS, VIEW_COMPLETE] }
+                campaignId: { type: string }
+                impressionId: { type: string }
+                developerId: { type: string }
+                viewDurationMs: { type: integer }
+      responses:
+        "200": { description: "{ ok: true } or { ok: true, idempotent: true }" }
+        "400": { description: Invalid request or impression mismatch }
+
+  /api/v1/earnings:
+    get:
+      summary: Developer earnings rollup (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: developerId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Today/week/month/lifetime earnings, impressions, clicks, payout history }
+        "401": { description: Missing/invalid session }
+        "403": { description: Signed in as someone other than this developer }
+
+  /api/v1/earnings/payout:
+    post:
+      summary: Request a payout of the full available balance (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Payout record (status PAID/PENDING/FAILED per the provider) }
+        "400": { description: Below minimum payout threshold }
+        "401": { description: Missing/invalid session }
+        "403": { description: Signed in as someone other than this developer }
+
+  /api/v1/developers/{id}/preferences:
+    get:
+      summary: Read developer preferences (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: adsEnabled, frequencyCapOverride, preferredCategories, payoutThresholdCents, currency }
+    patch:
+      summary: Update developer preferences, incl. the disable-ads switch (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Updated preferences }
+
+  /api/v1/developers/{id}/export:
+    get:
+      summary: Export all data held for a developer (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Full developer profile incl. earnings ledger, payouts, impressions, events }
+
+  /api/v1/developers/{id}:
+    delete:
+      summary: Delete a developer account and all associated data (requires session, owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK -- cascades to all owned records }
+
+  /api/v1/advertisers/signup:
+    post:
+      summary: Create an advertiser account (company + billing account)
+      responses:
+        "200": { description: userId, advertiserId }
+
+  /api/v1/campaigns:
+    post:
+      summary: Create a Draft campaign
+      responses:
+        "200": { description: Created campaign }
+    get:
+      summary: List an advertiser's campaigns with live stats
+      parameters:
+        - name: advertiserId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Campaigns with impressions/clicks/CTR/spend }
+
+  /api/v1/campaigns/{id}/creatives:
+    post:
+      summary: Add a creative to a Draft campaign
+      responses:
+        "200": { description: Created creative }
+
+  /api/v1/campaigns/{id}/submit:
+    post:
+      summary: Submit a Draft campaign (with at least one creative) for admin review
+      responses:
+        "200": { description: Campaign now SUBMITTED }
+        "400": { description: Missing creative }
+        "409": { description: Not in Draft status }
+
+  /api/v1/admin/campaigns:
+    get:
+      summary: List campaigns for the admin approval queue (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Campaigns with advertiser/creatives/targets }
+
+  /api/v1/admin/campaigns/{id}/approve:
+    post:
+      summary: Approve a Submitted campaign (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Campaign now APPROVED }
+
+  /api/v1/admin/campaigns/{id}/reject:
+    post:
+      summary: Reject a Submitted campaign with a reason (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Campaign now REJECTED }
+
+  /api/v1/admin/campaigns/{id}/pause:
+    post:
+      summary: Pause an Approved campaign (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Campaign now PAUSED }
+
+  /api/v1/admin/advertisers/{id}/suspend:
+    post:
+      summary: Suspend an advertiser account (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Advertiser now SUSPENDED }
+
+  /api/v1/admin/overview:
+    get:
+      summary: Platform analytics (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Developers, advertisers, impressions, spend, developer payout liability, platform revenue, pending approvals, open fraud flags }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,5 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "SESSION_SECRET",
+    "JWT_SECRET",
+    "PAYOUT_PROVIDER",
+    "BILLING_PROVIDER",
+    "STRIPE_SECRET_KEY",
+    "DEFAULT_DEVELOPER_REVENUE_SHARE_BPS",
+    "DEFAULT_CPM_CENTS",
+    "DEFAULT_PAYOUT_THRESHOLD_CENTS",
+    "MIN_VIEW_DURATION_MS",
+    "NEXT_PUBLIC_AD_SERVER_URL",
+    "NEXT_PUBLIC_ADVERTISER_APP_URL",
+    "WEB_APP_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
