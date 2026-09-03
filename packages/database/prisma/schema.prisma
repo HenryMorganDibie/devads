@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  DEVELOPER
+  ADVERTISER
+  ADMIN
+}
+
+enum CampaignStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAUSED
+  ARCHIVED
+}
+
+enum CreativeType {
+  IMAGE
+  VIDEO
+}
+
+enum AdEventType {
+  IMPRESSION
+  VIEW_COMPLETE
+  CLICK
+  DISMISS
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum FraudFlagStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+}
+
+enum FraudFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BillingProviderKind {
+  MOCK
+  STRIPE
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String? // nullable: magic-link-only accounts
+  role         UserRole
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  developerProfile   DeveloperProfile?
+  advertiserMemberships AdvertiserMember[]
+  clientInstallations ClientInstallation[]
+  privacyConsents    PrivacyConsent[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model DeveloperProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName       String?
+  country           String?
+  preferredCategories String[] @default([])
+  frequencyCapOverride Int?
+  payoutThresholdCents Int    @default(2000)
+  currency          String   @default("USD")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  earningsLedger DeveloperEarningsLedger[]
+  payouts        Payout[]
+  impressions    AdImpression[]
+  events         AdEvent[]
+
+  @@map("developer_profiles")
+}
+
+model Advertiser {
+  id          String   @id @default(cuid())
+  name        String
+  website     String?
+  status      String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members        AdvertiserMember[]
+  campaigns      Campaign[]
+  billingAccount AdvertiserBillingAccount?
+
+  @@map("advertisers")
+}
+
+model AdvertiserMember {
+  id           String   @id @default(cuid())
+  advertiserId String
+  advertiser   Advertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         String   @default("OWNER") // OWNER | MEMBER
+  createdAt    DateTime @default(now())
+
+  @@unique([advertiserId, userId])
+  @@map("advertiser_members")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns
+// ---------------------------------------------------------------------------
+
+model Campaign {
+  id               String         @id @default(cuid())
+  advertiserId     String
+  advertiser       Advertiser     @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  name             String
+  status           CampaignStatus @default(DRAFT)
+  isDemo           Boolean        @default(false)
+  cpmCents         Int
+  currency         String         @default("USD")
+  dailyBudgetCents Int?
+  totalBudgetCents Int?
+  startAt          DateTime?
+  endAt            DateTime?
+  rejectionReason  String?
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  creatives CampaignCreative[]
+  targets   CampaignTarget[]
+  impressions AdImpression[]
+  events    AdEvent[]
+  clicks    ClickEvent[]
+  spend     CampaignSpend[]
+  ledger    DeveloperEarningsLedger[]
+
+  @@index([advertiserId])
+  @@index([status])
+  @@map("campaigns")
+}
+
+model CampaignCreative {
+  id          String       @id @default(cuid())
+  campaignId  String
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type        CreativeType @default(IMAGE)
+  headline    String
+  body        String?
+  ctaLabel    String       @default("Learn more")
+  ctaUrl      String
+  imageKey    String? // MinIO/S3 object key
+  videoKey    String? // reserved for future richer clients; not rendered by v1 extension
+  mimeType    String?
+  sizeBytes   Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  impressions AdImpression[]
+
+  @@index([campaignId])
+  @@map("campaign_creatives")
+}
+
+model CampaignTarget {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  languages    String[] @default([])
+  frameworks   String[] @default([])
+  runtimes     String[] @default([])
+  platforms    String[] @default([])
+  countries    String[] @default([])
+  categories   String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([campaignId])
+  @@map("campaign_targets")
+}
+
+// ---------------------------------------------------------------------------
+// Delivery / tracking (server authoritative, idempotent via event_id)
+// ---------------------------------------------------------------------------
+
+model AdImpression {
+  id            String   @id @default(cuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creativeId    String
+  creative      CampaignCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+  developerId   String
+  developer     DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  installationId String?
+  installation  ClientInstallation? @relation(fields: [installationId], references: [id])
+  command       String?
+  eventId       String   @unique
+  cpmCents      Int
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+
+  events AdEvent[]
+
+  @@index([campaignId, developerId, createdAt])
+  @@map("ad_impressions")
+}
+
+model AdEvent {
+  id            String      @id @default(cuid())
+  eventId       String      @unique
+  type          AdEventType
+  campaignId    String
+  campaign      Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  impressionId  String?
+  impression    AdImpression? @relation(fields: [impressionId], references: [id])
+  developerId   String
+  developer     DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  viewDurationMs Int?
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+
+  @@index([campaignId, developerId, createdAt])
+  @@map("ad_events")
+}
+
+model ClickEvent {
+  id           String   @id @default(cuid())
+  eventId      String   @unique
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  developerId  String
+  targetUrl    String
+  createdAt    DateTime @default(now())
+
+  @@index([campaignId, developerId, createdAt])
+  @@map("click_events")
+}
+
+// ---------------------------------------------------------------------------
+// Money (Int minor units + currency alongside every amount)
+// ---------------------------------------------------------------------------
+
+model DeveloperEarningsLedger {
+  id            String   @id @default(cuid())
+  developerId   String
+  developer     DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  campaignId    String?
+  campaign      Campaign? @relation(fields: [campaignId], references: [id])
+  impressionEventId String @unique // ties 1:1 to the idempotent ad_events.event_id that generated this entry
+  amountCents   Int
+  currency      String   @default("USD")
+  description   String?
+  createdAt     DateTime @default(now())
+
+  @@index([developerId, createdAt])
+  @@map("developer_earnings_ledger")
+}
+
+model Payout {
+  id             String       @id @default(cuid())
+  developerId    String
+  developer      DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  amountCents    Int
+  currency       String       @default("USD")
+  status         PayoutStatus @default(PENDING)
+  provider       BillingProviderKind @default(MOCK)
+  providerRef    String?
+  requestedAt    DateTime     @default(now())
+  processedAt    DateTime?
+  failureReason  String?
+
+  @@index([developerId, status])
+  @@map("payouts")
+}
+
+model AdvertiserBillingAccount {
+  id            String   @id @default(cuid())
+  advertiserId  String   @unique
+  advertiser    Advertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  provider      BillingProviderKind @default(MOCK)
+  providerCustomerId String?
+  balanceCents  Int      @default(0)
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("advertiser_billing_accounts")
+}
+
+model CampaignSpend {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  amountCents  Int
+  currency     String   @default("USD")
+  reason       String   @default("IMPRESSION")
+  createdAt    DateTime @default(now())
+
+  @@index([campaignId, createdAt])
+  @@map("campaign_spend")
+}
+
+// ---------------------------------------------------------------------------
+// Trust & safety, device installs, privacy
+// ---------------------------------------------------------------------------
+
+model FraudFlag {
+  id          String            @id @default(cuid())
+  campaignId  String?
+  developerId String?
+  severity    FraudFlagSeverity @default(LOW)
+  status      FraudFlagStatus   @default(OPEN)
+  reason      String
+  details     Json?
+  createdAt   DateTime          @default(now())
+  reviewedAt  DateTime?
+
+  @@index([status])
+  @@map("fraud_flags")
+}
+
+model ClientInstallation {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId     String   @unique
+  platform     String?
+  extensionVersion String?
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  impressions AdImpression[]
+
+  @@index([userId])
+  @@map("client_installations")
+}
+
+model PrivacyConsent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  telemetryAllowed Boolean @default(true)
+  consentVersion   String
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("privacy_consents")
+}
