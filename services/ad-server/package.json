@@ -1,0 +1,28 @@
+{
+  "name": "@devads/ad-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devads/database": "*",
+    "@devads/shared": "*",
+    "@devads/targeting": "*",
+    "@devads/auth": "*",
+    "fastify": "^4.28.1",
+    "@fastify/cors": "^9.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}

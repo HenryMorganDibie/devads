@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: devads
       POSTGRES_DB: devads
     ports:
-      - "5432:5432"
+      - "5442:5432"
     volumes:
       - devads-postgres-data:/var/lib/postgresql/data
     healthcheck:
