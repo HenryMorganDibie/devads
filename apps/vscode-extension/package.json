@@ -1,0 +1,94 @@
+{
+  "name": "devads",
+  "displayName": "DevAds",
+  "description": "Turn developer wait time into value. Sponsored cards during builds, installs, and tests you were already waiting on -- never before, never longer.",
+  "version": "0.1.0",
+  "publisher": "devads",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devads/devads"
+  },
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "devads.signIn", "title": "DevAds: Sign In" },
+      { "command": "devads.signOut", "title": "DevAds: Sign Out" },
+      { "command": "devads.enable", "title": "DevAds: Enable" },
+      { "command": "devads.disable", "title": "DevAds: Disable" },
+      { "command": "devads.openDashboard", "title": "DevAds: Open Dashboard" },
+      { "command": "devads.showStatus", "title": "DevAds: Show Status" },
+      { "command": "devads.adClicked", "title": "DevAds: Open Sponsor Link" },
+      { "command": "devads.adDismissed", "title": "DevAds: Dismiss Ad" }
+    ],
+    "configuration": {
+      "title": "DevAds",
+      "properties": {
+        "devads.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show sponsored cards during long-running terminal commands."
+        },
+        "devads.minimumWaitSeconds": {
+          "type": "number",
+          "default": 8,
+          "minimum": 2,
+          "description": "Only consider showing an ad after a command has been running at least this long. Commands that finish sooner never show an ad."
+        },
+        "devads.videoAdsEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow video creatives. (v1 status bar surface renders image/card creatives only; this is reserved for future richer surfaces.)"
+        },
+        "devads.categories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Only show ads from these categories. Leave empty to allow all categories."
+        },
+        "devads.categoriesOptOut": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Never show ads from these categories."
+        },
+        "devads.adServerUrl": {
+          "type": "string",
+          "default": "http://localhost:4000",
+          "description": "DevAds ad server URL."
+        },
+        "devads.webAppUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "DevAds web dashboard URL, used for sign-in and device pairing."
+        },
+        "devads.telemetryEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send coarse, allowlisted context (language, framework, runtime, platform, country) with ad requests. Never sends source code, file contents, environment variables, secrets, or full command arguments."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "npm run build && npx @vscode/vsce package --no-dependencies -o devads-0.1.0.vsix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/vscode": "^1.93.0",
+    "@vscode/vsce": "^3.1.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}

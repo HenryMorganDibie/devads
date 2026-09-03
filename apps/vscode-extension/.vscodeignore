@@ -1,0 +1,7 @@
+src/**
+esbuild.config.mjs
+tsconfig.json
+.vscodeignore
+**/*.map
+node_modules/**
+*.vsix

@@ -137,10 +137,10 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { developerProfile: true } });
       if (!user) return reply.send({ status: "expired", token: null });
       const token = signSession({ sub: user.id, role: user.role }, SESSION_SECRET);
-      return reply.send({ status: "approved", token });
+      return reply.send({ status: "approved", token, developerId: user.developerProfile?.id ?? null });
     }
 
-    return reply.send({ status: request.status.toLowerCase(), token: null });
+    return reply.send({ status: request.status.toLowerCase(), token: null, developerId: null });
   });
 
   // Called by the web app (after the developer signs in and enters the user
