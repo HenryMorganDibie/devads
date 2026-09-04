@@ -47,7 +47,10 @@ const RejectBody = z.object({ reason: z.string().min(1).max(500) });
  * dashboards) unable to directly manipulate accounting state.
  */
 export async function registerCampaignsRoutes(app: FastifyInstance) {
-  app.post("/api/v1/advertisers/signup", async (req, reply) => {
+  app.post(
+    "/api/v1/advertisers/signup",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
     const parsed = AdvertiserSignupSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
     const { email, password, companyName, website } = parsed.data;
@@ -71,9 +74,10 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
       return { user, advertiser };
     });
 
-    const token = signSession({ sub: result.user.id, role: "ADVERTISER" }, SESSION_SECRET);
-    return reply.send({ userId: result.user.id, advertiserId: result.advertiser.id, token });
-  });
+      const token = signSession({ sub: result.user.id, role: "ADVERTISER" }, SESSION_SECRET);
+      return reply.send({ userId: result.user.id, advertiserId: result.advertiser.id, token });
+    }
+  );
 
   app.post("/api/v1/campaigns", { preHandler: requireSession }, async (req, reply) => {
     const parsed = CreateCampaignSchema.safeParse(req.body);

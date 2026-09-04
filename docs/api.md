@@ -82,10 +82,17 @@ signed-in non-owner/non-member, 403 for a non-admin hitting admin routes,
 404 when a session resolves to no matching profile, 200 for the actual
 owner) plus dedicated cases in `ads.integration.test.ts`.
 
-**Known remaining gap:** `GET /api/v1/admin/campaigns` and the advertiser
-billing account are not yet covered by rate limiting, and there's no CSRF
-protection layer (acceptable for a bearer-token API consumed by native/SPA
-clients, but worth an explicit look before handling real payment flows).
-CORS is currently wide open (`origin: true`) for local multi-port dev
-convenience and must be locked down to known origins before a real
+## Rate limiting
+
+Every route has a default limit of 300 requests/minute per IP
+(`@fastify/rate-limit`, global). Auth endpoints that are natural
+brute-force targets (`/auth/login`, `/auth/admin-login`, `/auth/signup`,
+`/advertisers/signup`) have a much stricter 10/minute per-route limit.
+Exceeding a limit returns `429`. Covered by `rateLimit.integration.test.ts`.
+
+**Known remaining gap:** there's no CSRF protection layer (acceptable for
+a bearer-token API consumed by native/SPA clients that don't rely on
+cookies for auth, but worth an explicit look before handling real payment
+flows). CORS is currently wide open (`origin: true`) for local multi-port
+dev convenience and must be locked down to known origins before a real
 deployment.

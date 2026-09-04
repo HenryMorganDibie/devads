@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
+import rateLimit from "@fastify/rate-limit";
 import { registerAdsRoutes } from "./routes/ads.js";
 import { registerEventsRoutes } from "./routes/events.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -15,6 +16,11 @@ export async function buildApp() {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true });
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
+  // Global default: generous enough for normal extension polling +
+  // dashboard use, but bounds abuse/DoS against the whole API. Sensitive
+  // auth endpoints (login, signup, admin-login) set a much stricter
+  // per-route limit below to slow down credential brute-forcing.
+  await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
   app.addHook("onRequest", attachSession);
 
   app.get("/health", async () => ({ status: "ok" }));

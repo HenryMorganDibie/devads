@@ -34,8 +34,10 @@ const DeviceAuthApproveBody = z.object({
  * client (extension, future CLI, the web dashboards) authenticates against
  * one service rather than duplicating session logic per app.
  */
+const AUTH_RATE_LIMIT = { rateLimit: { max: 10, timeWindow: "1 minute" } };
+
 export async function registerAuthRoutes(app: FastifyInstance) {
-  app.post("/api/v1/auth/signup", async (req, reply) => {
+  app.post("/api/v1/auth/signup", { config: AUTH_RATE_LIMIT }, async (req, reply) => {
     const parsed = SignupSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
     const { email, password, role } = parsed.data;
@@ -57,7 +59,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     return reply.send({ token, userId: user.id, developerId: user.developerProfile?.id ?? null });
   });
 
-  app.post("/api/v1/auth/login", async (req, reply) => {
+  app.post("/api/v1/auth/login", { config: AUTH_RATE_LIMIT }, async (req, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
     const { email, password } = parsed.data;
@@ -79,7 +81,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/api/v1/auth/admin-login", async (req, reply) => {
+  app.post("/api/v1/auth/admin-login", { config: AUTH_RATE_LIMIT }, async (req, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
     const { email, password } = parsed.data;
