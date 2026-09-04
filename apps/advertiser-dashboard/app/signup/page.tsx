@@ -18,7 +18,7 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { ok, data } = await apiPost<{ userId: string; advertiserId: string; error?: string }>(
+    const { ok, data } = await apiPost<{ userId: string; advertiserId: string; token: string; error?: string }>(
       "/api/v1/advertisers/signup",
       { email, password, companyName, website: website || undefined }
     );
@@ -27,7 +27,7 @@ export default function SignupPage() {
       setError(data.error === "email_already_registered" ? "That email is already registered." : "Signup failed.");
       return;
     }
-    saveSession({ userId: data.userId, advertiserId: data.advertiserId });
+    saveSession({ userId: data.userId, advertiserId: data.advertiserId, token: data.token });
     router.push("/campaigns");
   }
 

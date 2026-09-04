@@ -3,6 +3,7 @@ export const AD_SERVER_URL = process.env.NEXT_PUBLIC_AD_SERVER_URL ?? "http://lo
 export interface AdvertiserSession {
   userId: string;
   advertiserId: string;
+  token: string;
 }
 
 const KEY = "devads:advertiser-session";
@@ -28,10 +29,15 @@ export function clearSession() {
   window.localStorage.removeItem(KEY);
 }
 
+function authHeaders(): Record<string, string> {
+  const session = loadSession();
+  return session ? { Authorization: `Bearer ${session.token}` } : {};
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: T }> {
   const res = await fetch(`${AD_SERVER_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as T;
@@ -39,7 +45,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<{ ok: boo
 }
 
 export async function apiGet<T>(path: string): Promise<{ ok: boolean; status: number; data: T }> {
-  const res = await fetch(`${AD_SERVER_URL}${path}`);
+  const res = await fetch(`${AD_SERVER_URL}${path}`, { headers: authHeaders() });
   const data = (await res.json().catch(() => ({}))) as T;
   return { ok: res.ok, status: res.status, data };
 }

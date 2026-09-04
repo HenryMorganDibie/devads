@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@devads/database";
+import { signSession } from "@devads/auth";
 import { buildApp } from "../app.js";
+
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 
 /**
  * Integration test against a real Postgres (DATABASE_URL from env, expected
@@ -41,6 +44,9 @@ const campaignId = "test-fixture-campaign";
 const creativeId = "test-fixture-creative";
 const userId = "test-fixture-user";
 const devId = "test-fixture-developer";
+const authHeader = () => ({
+  authorization: `Bearer ${signSession({ sub: userId, role: "DEVELOPER" }, SESSION_SECRET)}`,
+});
 
 beforeEach(async () => {
   if (!dbAvailable) return;
@@ -110,6 +116,7 @@ describe("ad-server integration", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      headers: authHeader(),
       payload: { context: { developerId: devId, command: "npm", language: "rust", elapsedSeconds: 30 } },
     });
     expect(res.statusCode).toBe(200);
@@ -124,6 +131,7 @@ describe("ad-server integration", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      headers: authHeader(),
       payload: {
         context: { developerId: devId, command: "npm", language: "typescript", elapsedSeconds: 30 },
       },
@@ -141,6 +149,7 @@ describe("ad-server integration", () => {
     const selectRes = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      headers: authHeader(),
       payload: {
         context: { developerId: devId, command: "npm", language: "typescript", elapsedSeconds: 30 },
       },
@@ -156,6 +165,7 @@ describe("ad-server integration", () => {
     const viewRes = await app.inject({
       method: "POST",
       url: "/api/v1/events",
+      headers: authHeader(),
       payload: {
         eventId: randomUUID(),
         type: "VIEW_COMPLETE",
@@ -180,6 +190,7 @@ describe("ad-server integration", () => {
     const selectRes = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      headers: authHeader(),
       payload: {
         context: { developerId: devId, command: "npm", language: "typescript", elapsedSeconds: 30 },
       },
@@ -195,8 +206,8 @@ describe("ad-server integration", () => {
       viewDurationMs: 3000,
     };
 
-    const first = await app.inject({ method: "POST", url: "/api/v1/events", payload });
-    const second = await app.inject({ method: "POST", url: "/api/v1/events", payload });
+    const first = await app.inject({ method: "POST", url: "/api/v1/events", headers: authHeader(), payload });
+    const second = await app.inject({ method: "POST", url: "/api/v1/events", headers: authHeader(), payload });
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json().idempotent).toBe(true);
@@ -214,6 +225,7 @@ describe("ad-server integration", () => {
     const selectRes = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      headers: authHeader(),
       payload: {
         context: { developerId: devId, command: "npm", language: "typescript", elapsedSeconds: 30 },
       },
@@ -223,6 +235,7 @@ describe("ad-server integration", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/events",
+      headers: authHeader(),
       payload: {
         eventId: randomUUID(),
         type: "VIEW_COMPLETE",

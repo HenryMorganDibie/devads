@@ -80,3 +80,55 @@ function splitByBpsFloat(amountCents: number, primaryBps: number): { primaryCent
 export function formatMoney(m: Money, locale = "en-US"): string {
   return new Intl.NumberFormat(locale, { style: "currency", currency: m.currency }).format(m.amountCents / 100);
 }
+
+const MILLI_CENTS_PER_CENT = 1000;
+
+/**
+ * Exact cost of one impression, in milli-cents (1 cent = 1000 milli-cents),
+ * given a campaign's CPM (cost per 1000 impressions) in cents.
+ * cpmCents / 1000 impressions, converted to milli-cents, is always an
+ * integer -- this never needs rounding, unlike the cents-per-impression
+ * figure itself (which is usually fractional, e.g. $15 CPM = 1.5 cents).
+ */
+export function impressionCostMilliCents(cpmCents: number): number {
+  if (!Number.isInteger(cpmCents) || cpmCents < 0) {
+    throw new RangeError(`cpmCents must be a non-negative integer, got ${cpmCents}`);
+  }
+  return cpmCents; // (cpmCents / 1000) cents * 1000 milli-cents/cent == cpmCents
+}
+
+/**
+ * Exact per-impression revenue-share earnings, in milli-cents, given the
+ * exact impression cost (in milli-cents) and a basis-points share. Floors
+ * at the milli-cent level only (a sub-$0.00001 rounding, not per-cent).
+ */
+export function impressionEarningsMilliCents(costMilliCents: number, revenueShareBps: number): number {
+  if (revenueShareBps < 0 || revenueShareBps > 10000) {
+    throw new RangeError(`revenueShareBps must be between 0 and 10000, got ${revenueShareBps}`);
+  }
+  return Math.floor((costMilliCents * revenueShareBps) / 10000);
+}
+
+export interface CarryResolution {
+  /** Whole cents that should be recorded as spent/earned right now. */
+  wholeCents: number;
+  /** Updated carry to persist (fractional milli-cents not yet realized). */
+  newCarryMilliCents: number;
+}
+
+/**
+ * Adds `addMilliCents` to a persisted running carry and peels off however
+ * many whole cents that crosses. Called once per impression with the
+ * previous persisted carry (read/written inside the same DB transaction as
+ * the ledger/spend write, so concurrent impressions serialize correctly via
+ * the row lock on the UPDATE), this guarantees the sum of all `wholeCents`
+ * returned over time exactly equals floor(total milli-cents / 1000) -- no
+ * cent is ever silently lost the way flooring each impression individually
+ * would lose it.
+ */
+export function resolveCarry(previousCarryMilliCents: number, addMilliCents: number): CarryResolution {
+  const total = previousCarryMilliCents + addMilliCents;
+  const wholeCents = Math.floor(total / MILLI_CENTS_PER_CENT);
+  const newCarryMilliCents = total - wholeCents * MILLI_CENTS_PER_CENT;
+  return { wholeCents, newCarryMilliCents };
+}

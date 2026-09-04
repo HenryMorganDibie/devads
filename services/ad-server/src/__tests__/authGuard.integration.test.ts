@@ -88,11 +88,37 @@ describe("auth guard", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("still allows unauthenticated ad selection (extension flow, no gap introduced)", async () => {
+  it("rejects ad selection with no session (closes the developer-impersonation gap)", async () => {
     if (!dbAvailable) return;
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/ads/select",
+      payload: { context: { developerId: devId, command: "npm", elapsedSeconds: 30 } },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects ad selection when the session belongs to a different developer than context.developerId claims", async () => {
+    if (!dbAvailable) return;
+    // otherUserId is signed in, but the request body claims to be devId's
+    // context -- the server must derive identity from the session, not
+    // from context.developerId, so this must resolve against otherUserId's
+    // OWN developer profile (which doesn't exist here) rather than devId's.
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ads/select",
+      headers: { authorization: `Bearer ${tokenFor(otherUserId)}` },
+      payload: { context: { developerId: devId, command: "npm", elapsedSeconds: 30 } },
+    });
+    expect(res.statusCode).toBe(404); // otherUserId has no developer profile of its own
+  });
+
+  it("allows ad selection for the session's own developer profile", async () => {
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ads/select",
+      headers: { authorization: `Bearer ${tokenFor(ownerUserId)}` },
       payload: { context: { developerId: devId, command: "npm", elapsedSeconds: 30 } },
     });
     expect(res.statusCode).toBe(200);

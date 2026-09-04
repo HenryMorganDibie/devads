@@ -8,6 +8,7 @@ const PreferencesSchema = z.object({
   adsEnabled: z.boolean().optional(),
   frequencyCapOverride: z.number().int().positive().nullable().optional(),
   preferredCategories: z.array(z.string()).optional(),
+  categoriesOptOut: z.array(z.string()).optional(),
 });
 
 /**
@@ -46,6 +47,7 @@ export async function registerDeveloperRoutes(app: FastifyInstance) {
       adsEnabled: developer.adsEnabled,
       frequencyCapOverride: developer.frequencyCapOverride,
       preferredCategories: developer.preferredCategories,
+      categoriesOptOut: developer.categoriesOptOut,
       payoutThresholdCents: developer.payoutThresholdCents,
       currency: developer.currency,
     });
@@ -68,6 +70,7 @@ export async function registerDeveloperRoutes(app: FastifyInstance) {
       adsEnabled: updated.adsEnabled,
       frequencyCapOverride: updated.frequencyCapOverride,
       preferredCategories: updated.preferredCategories,
+      categoriesOptOut: updated.categoriesOptOut,
     });
   });
 

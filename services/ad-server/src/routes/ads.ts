@@ -5,6 +5,7 @@ import { AdSelectRequestSchema, type AdSelectResponse } from "@devads/shared";
 import { isEligible, selectAd } from "@devads/targeting";
 import { loadBudgetUsage, loadCampaignCandidates, loadImpressionHistory } from "../lib/candidates.js";
 import { config } from "../lib/config.js";
+import { requireSession } from "../lib/authGuard.js";
 
 /**
  * POST /api/v1/ads/select
@@ -15,9 +16,15 @@ import { config } from "../lib/config.js";
  * and -- if a candidate is selected -- creates the authoritative
  * AdImpression + IMPRESSION AdEvent rows itself (the client never supplies
  * or controls the event id used for money accounting).
+ *
+ * The caller's identity (developerId) is ALWAYS derived from the verified
+ * session token, never from the request body -- context.developerId in the
+ * request is ignored for authorization purposes. Without this, any caller
+ * could request ads / consume frequency caps / trigger paid views as an
+ * arbitrary other developer simply by guessing or enumerating ids.
  */
 export async function registerAdsRoutes(app: FastifyInstance) {
-  app.post("/api/v1/ads/select", async (req, reply) => {
+  app.post("/api/v1/ads/select", { preHandler: requireSession }, async (req, reply) => {
     const parsed = AdSelectRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
@@ -25,7 +32,7 @@ export async function registerAdsRoutes(app: FastifyInstance) {
     const { context } = parsed.data;
 
     const developer = await prisma.developerProfile.findUnique({
-      where: { id: context.developerId },
+      where: { userId: req.session!.sub },
     });
     if (!developer) {
       return reply.status(404).send({ error: "developer_not_found" });
@@ -37,7 +44,7 @@ export async function registerAdsRoutes(app: FastifyInstance) {
       // disabled developer never receives an ad even if a client is
       // compromised, buggy, or simply out of date.
       enabled: developer.adsEnabled,
-      categoriesOptOut: developer.preferredCategories.length > 0 ? [] : [],
+      categoriesOptOut: developer.categoriesOptOut,
       frequencyCapOverride: developer.frequencyCapOverride ?? undefined,
     };
 

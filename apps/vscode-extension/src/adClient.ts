@@ -43,13 +43,21 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null
  * disrupt the developer's actual work.
  */
 export class AdClient {
-  constructor(private readonly baseUrl: string, private readonly fetchImpl: typeof fetch = fetch) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly sessionToken: string | undefined,
+    private readonly fetchImpl: typeof fetch = fetch
+  ) {}
+
+  private authHeaders(): Record<string, string> {
+    return this.sessionToken ? { Authorization: `Bearer ${this.sessionToken}` } : {};
+  }
 
   async selectAd(context: AdRequestContext): Promise<AdCandidate | null> {
     const result = await withTimeout(
       this.fetchImpl(`${this.baseUrl}/api/v1/ads/select`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...this.authHeaders() },
         body: JSON.stringify({ context }),
       }),
       REQUEST_TIMEOUT_MS
@@ -74,7 +82,7 @@ export class AdClient {
     await withTimeout(
       this.fetchImpl(`${this.baseUrl}/api/v1/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...this.authHeaders() },
         body: JSON.stringify(event),
       }),
       REQUEST_TIMEOUT_MS

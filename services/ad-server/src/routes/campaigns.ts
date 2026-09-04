@@ -2,9 +2,19 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@devads/database";
 import { CreateCampaignSchema } from "@devads/shared";
-import { hashPassword } from "@devads/auth";
+import { hashPassword, signSession } from "@devads/auth";
 import { config } from "../lib/config.js";
-import { requireAdmin } from "../lib/authGuard.js";
+import { requireAdmin, requireSession } from "../lib/authGuard.js";
+
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
+
+/** True if the signed-in user (req.session.sub) is a member of advertiserId. */
+async function isAdvertiserMember(userId: string, advertiserId: string): Promise<boolean> {
+  const membership = await prisma.advertiserMember.findUnique({
+    where: { advertiserId_userId: { advertiserId, userId } },
+  });
+  return membership !== null;
+}
 
 const AdvertiserSignupSchema = z.object({
   email: z.string().email(),
@@ -60,10 +70,11 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
       return { user, advertiser };
     });
 
-    return reply.send({ userId: result.user.id, advertiserId: result.advertiser.id });
+    const token = signSession({ sub: result.user.id, role: "ADVERTISER" }, SESSION_SECRET);
+    return reply.send({ userId: result.user.id, advertiserId: result.advertiser.id, token });
   });
 
-  app.post("/api/v1/campaigns", async (req, reply) => {
+  app.post("/api/v1/campaigns", { preHandler: requireSession }, async (req, reply) => {
     const parsed = CreateCampaignSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request", details: parsed.error.flatten() });
     const input = parsed.data;
@@ -71,6 +82,9 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     const advertiser = await prisma.advertiser.findUnique({ where: { id: input.advertiserId } });
     if (!advertiser) return reply.status(404).send({ error: "advertiser_not_found" });
     if (advertiser.status !== "ACTIVE") return reply.status(403).send({ error: "advertiser_suspended" });
+    if (!(await isAdvertiserMember(req.session!.sub, input.advertiserId))) {
+      return reply.status(403).send({ error: "forbidden" });
+    }
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -100,13 +114,16 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(campaign);
   });
 
-  app.post("/api/v1/campaigns/:id/creatives", async (req, reply) => {
+  app.post("/api/v1/campaigns/:id/creatives", { preHandler: requireSession }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     const parsed = CreativeSchema.safeParse(req.body);
     if (!params.success || !parsed.success) return reply.status(400).send({ error: "invalid_request" });
 
     const campaign = await prisma.campaign.findUnique({ where: { id: params.data.id } });
     if (!campaign) return reply.status(404).send({ error: "campaign_not_found" });
+    if (!(await isAdvertiserMember(req.session!.sub, campaign.advertiserId))) {
+      return reply.status(403).send({ error: "forbidden" });
+    }
     if (campaign.status !== "DRAFT") return reply.status(409).send({ error: "campaign_not_editable" });
 
     const creative = await prisma.campaignCreative.create({
@@ -115,7 +132,7 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(creative);
   });
 
-  app.post("/api/v1/campaigns/:id/submit", async (req, reply) => {
+  app.post("/api/v1/campaigns/:id/submit", { preHandler: requireSession }, async (req, reply) => {
     const params = AdminActionParams.safeParse(req.params);
     if (!params.success) return reply.status(400).send({ error: "invalid_request" });
 
@@ -124,6 +141,9 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
       include: { creatives: true, targets: true },
     });
     if (!campaign) return reply.status(404).send({ error: "campaign_not_found" });
+    if (!(await isAdvertiserMember(req.session!.sub, campaign.advertiserId))) {
+      return reply.status(403).send({ error: "forbidden" });
+    }
     if (campaign.status !== "DRAFT") return reply.status(409).send({ error: "campaign_not_in_draft" });
     if (campaign.creatives.length === 0) return reply.status(400).send({ error: "campaign_needs_at_least_one_creative" });
 
@@ -134,9 +154,12 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.get("/api/v1/campaigns", async (req, reply) => {
+  app.get("/api/v1/campaigns", { preHandler: requireSession }, async (req, reply) => {
     const query = z.object({ advertiserId: z.string().min(1) }).safeParse(req.query);
     if (!query.success) return reply.status(400).send({ error: "invalid_request" });
+    if (!(await isAdvertiserMember(req.session!.sub, query.data.advertiserId))) {
+      return reply.status(403).send({ error: "forbidden" });
+    }
 
     const campaigns = await prisma.campaign.findMany({
       where: { advertiserId: query.data.advertiserId },

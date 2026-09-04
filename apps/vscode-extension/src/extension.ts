@@ -37,14 +37,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   let pollTimer: ReturnType<typeof setInterval> | undefined;
 
-  function getClient(): AdClient {
-    return new AdClient(readConfig().adServerUrl);
+  async function getClient(): Promise<AdClient> {
+    const token = await getSessionToken(context);
+    return new AdClient(readConfig().adServerUrl, token);
   }
 
   async function handleAdClick(ad: AdCandidate) {
     const developerId = getDeveloperId(context);
     if (developerId) {
-      void getClient().reportEvent({
+      const client = await getClient();
+      void client.reportEvent({
         eventId: randomUUID(),
         type: "CLICK",
         campaignId: ad.campaignId,
@@ -59,7 +61,8 @@ export function activate(context: vscode.ExtensionContext) {
   async function handleAdDismiss(ad: AdCandidate) {
     const developerId = getDeveloperId(context);
     if (developerId) {
-      void getClient().reportEvent({
+      const client = await getClient();
+      void client.reportEvent({
         eventId: randomUUID(),
         type: "DISMISS",
         campaignId: ad.campaignId,
@@ -77,7 +80,8 @@ export function activate(context: vscode.ExtensionContext) {
     const viewDurationMs = statusBar.viewDurationMs();
     statusBar.hide();
     if (!developerId) return;
-    void getClient().reportEvent({
+    const client = await getClient();
+    void client.reportEvent({
       eventId: randomUUID(),
       type: "VIEW_COMPLETE",
       campaignId: ad.campaignId,
@@ -109,7 +113,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (!developerId) continue;
 
       const detected = buildContext();
-      const ad = await getClient().selectAd({
+      const client = await getClient();
+      const ad = await client.selectAd({
         developerId,
         installationId,
         command: config.telemetryEnabled ? coarseCommandName(tracker.currentCommand() ?? "") : undefined,

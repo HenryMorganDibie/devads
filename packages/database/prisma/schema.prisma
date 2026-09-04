@@ -90,10 +90,15 @@ model DeveloperProfile {
   displayName       String?
   country           String?
   adsEnabled        Boolean  @default(true)
-  preferredCategories String[] @default([])
+  preferredCategories String[] @default([]) // categories the developer is more interested in (opt-in signal)
+  categoriesOptOut  String[] @default([]) // categories the developer never wants to see (hard exclusion)
   frequencyCapOverride Int?
   payoutThresholdCents Int    @default(2000)
   currency          String   @default("USD")
+  // Same milli-cent carry technique as Campaign.spendCarryMilliCents,
+  // applied to this developer's revenue-share earnings so fractional
+  // cents accumulate exactly instead of being floored away per impression.
+  earningsCarryMilliCents Int @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -159,6 +164,12 @@ model Campaign {
   currency         String         @default("USD")
   dailyBudgetCents Int?
   totalBudgetCents Int?
+  // Fractional milli-cents (1 cent = 1000 milli-cents) not yet realized as a
+  // whole cent of spend. cpmCents/1000 per impression is exact in milli-cent
+  // units, so accumulating here and only writing a campaign_spend row once
+  // this crosses a whole cent means total spend is never systematically
+  // understated the way floor()-per-impression would be.
+  spendCarryMilliCents Int @default(0)
   startAt          DateTime?
   endAt            DateTime?
   rejectionReason  String?

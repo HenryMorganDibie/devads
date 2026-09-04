@@ -16,16 +16,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { ok, data } = await apiPost<{ userId: string; advertiserId: string | null }>("/api/v1/auth/login", {
-      email,
-      password,
-    });
+    const { ok, data } = await apiPost<{ userId: string; advertiserId: string | null; token: string }>(
+      "/api/v1/auth/login",
+      { email, password }
+    );
     setLoading(false);
     if (!ok || !data.advertiserId) {
       setError(!ok ? "Invalid email or password." : "This account has no advertiser profile.");
       return;
     }
-    saveSession({ userId: data.userId, advertiserId: data.advertiserId });
+    saveSession({ userId: data.userId, advertiserId: data.advertiserId, token: data.token });
     router.push("/campaigns");
   }
 
