@@ -25,6 +25,27 @@ machine-readable spec: [openapi.yaml](./openapi.yaml).
   unique DB constraint -- retries are safe no-ops, not double-counts.
 - Money fields are always integer minor units (`amountCents`,`cpmCents`, ...)
   plus a `currency` code -- never a float.
+- Concurrency-safe by construction, not by luck: campaign spend and
+  developer earnings accrue via a Postgres row lock (acquired by the first
+  `UPDATE` inside each accounting transaction) that serializes concurrent
+  writers to the same campaign/developer row; payout requests acquire a
+  `pg_advisory_xact_lock` keyed on `developerId` so two concurrent
+  withdrawal requests can't both read the same "available balance" and
+  both get paid. Each guarantee has a dedicated concurrent-request
+  integration test (see `carryPrecision`, `budgetEnforcement`, and
+  `payouts` test files) that fires real simultaneous HTTP requests against
+  a live Postgres and asserts the totals are exact -- not just correct
+  when called one at a time.
+- Campaign budgets are enforced at spend-commit time (inside the same
+  locked transaction as the spend write), not only as a best-effort
+  pre-check at ad-selection time. Selection-time budget filtering is a
+  fast optimization that usually stops serving an exhausted campaign
+  before another impression is even requested; the authoritative check
+  happens when a qualified view is about to actually charge the campaign,
+  so a handful of impressions that were "in flight" when the budget ran
+  out can't blow through it -- any such race is absorbed by the platform,
+  bounded to at most one impression's cost per concurrent request, rather
+  than overcharging the advertiser.
 
 ## Authorization
 

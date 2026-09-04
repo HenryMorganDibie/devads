@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma, prisma } from "@devads/database";
+import { Prisma, prisma, type Campaign } from "@devads/database";
 import {
   AdEventRequestSchema,
   impressionCostMilliCents,
@@ -10,6 +10,49 @@ import { config } from "../lib/config.js";
 import { requireSession } from "../lib/authGuard.js";
 
 const UNIQUE_VIOLATION = "P2002";
+
+function startOfUtcDay(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * True if committing `additionalCents` of spend right now would push this
+ * campaign over its daily and/or total budget. Must be called from inside
+ * the same transaction that already holds the campaign row lock (see the
+ * comment at the call site) so concurrent callers see a consistent view of
+ * spend-so-far rather than racing on a stale read.
+ */
+async function isBudgetExceeded(
+  tx: Prisma.TransactionClient,
+  campaignId: string,
+  campaign: Pick<Campaign, "dailyBudgetCents" | "totalBudgetCents">,
+  additionalCents: number
+): Promise<boolean> {
+  if (campaign.dailyBudgetCents == null && campaign.totalBudgetCents == null) return false;
+
+  const now = new Date();
+  const [todaySpend, totalSpend] = await Promise.all([
+    campaign.dailyBudgetCents != null
+      ? tx.campaignSpend.aggregate({
+          where: { campaignId, createdAt: { gte: startOfUtcDay(now) } },
+          _sum: { amountCents: true },
+        })
+      : Promise.resolve(null),
+    campaign.totalBudgetCents != null
+      ? tx.campaignSpend.aggregate({ where: { campaignId }, _sum: { amountCents: true } })
+      : Promise.resolve(null),
+  ]);
+
+  if (campaign.dailyBudgetCents != null) {
+    const spentToday = (todaySpend?._sum.amountCents ?? 0) + additionalCents;
+    if (spentToday > campaign.dailyBudgetCents) return true;
+  }
+  if (campaign.totalBudgetCents != null) {
+    const spentTotal = (totalSpend?._sum.amountCents ?? 0) + additionalCents;
+    if (spentTotal > campaign.totalBudgetCents) return true;
+  }
+  return false;
+}
 
 /**
  * POST /api/v1/events
@@ -77,12 +120,20 @@ export async function registerEventsRoutes(app: FastifyInstance) {
 
     if (body.type === "CLICK") {
       try {
+        // Snapshot the creative's destination URL as it was AT THE TIME OF
+        // THE CLICK, rather than leaving it blank or re-deriving it later --
+        // an advertiser can edit a creative's URL after the fact, and a
+        // historical click record should reflect where the developer was
+        // actually sent, not wherever the URL points today.
+        const creative = impression
+          ? await prisma.campaignCreative.findUnique({ where: { id: impression.creativeId } })
+          : null;
         await prisma.clickEvent.create({
           data: {
             eventId: `${body.eventId}-click`,
             campaignId: body.campaignId,
             developerId: developer.id,
-            targetUrl: "",
+            targetUrl: creative?.ctaUrl ?? "",
           },
         });
       } catch (err) {
@@ -110,6 +161,13 @@ export async function registerEventsRoutes(app: FastifyInstance) {
         await prisma.$transaction(async (tx) => {
           const costAddMilliCents = impressionCostMilliCents(impression!.cpmCents);
 
+          // This UPDATE takes Postgres's row lock on the campaign for the
+          // rest of the transaction, which is also what makes budget
+          // enforcement below safe under concurrency: two simultaneous
+          // qualified views for the same campaign can no longer both read
+          // the same "spend so far" and both slip under the budget -- the
+          // second transaction blocks here until the first commits, then
+          // sees the first's already-committed spend.
           const campaignAfter = await tx.campaign.update({
             where: { id: impression!.campaignId },
             data: { spendCarryMilliCents: { increment: costAddMilliCents } },
@@ -119,15 +177,31 @@ export async function registerEventsRoutes(app: FastifyInstance) {
             where: { id: impression!.campaignId },
             data: { spendCarryMilliCents: spendResolved.newCarryMilliCents },
           });
+
           if (spendResolved.wholeCents > 0) {
-            await tx.campaignSpend.create({
-              data: {
-                campaignId: impression!.campaignId,
-                amountCents: spendResolved.wholeCents,
-                currency: impression!.currency,
-                reason: "IMPRESSION",
-              },
-            });
+            const budgetExceeded = await isBudgetExceeded(
+              tx,
+              impression!.campaignId,
+              campaignAfter,
+              spendResolved.wholeCents
+            );
+            // Budget is a soft cap here: the developer's view genuinely
+            // happened and still earns its revenue share below, but once
+            // the campaign's budget is exhausted the platform (not the
+            // advertiser) absorbs the cost of this specific race-condition
+            // impression rather than overcharging the advertiser. Bounded
+            // to at most one impression's cost per race, since the row
+            // lock above prevents unbounded concurrent overspend.
+            if (!budgetExceeded) {
+              await tx.campaignSpend.create({
+                data: {
+                  campaignId: impression!.campaignId,
+                  amountCents: spendResolved.wholeCents,
+                  currency: impression!.currency,
+                  reason: "IMPRESSION",
+                },
+              });
+            }
           }
 
           const earnAddMilliCents = impressionEarningsMilliCents(

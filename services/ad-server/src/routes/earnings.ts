@@ -95,10 +95,18 @@ export async function registerEarningsRoutes(app: FastifyInstance) {
    *
    * Requests a payout of the developer's full available balance. The
    * server recomputes the available balance itself (lifetime ledger sum
-   * minus already-PAID payouts) rather than trusting anything from the
+   * minus payouts already PENDING/PROCESSING/PAID -- not just PAID, so a
+   * second request can't see stale "available" balance while a first
+   * payout is still in flight) rather than trusting anything from the
    * client, enforces the minimum payout threshold, and only marks the
    * Payout row PAID after the PayoutProvider confirms success -- a failed
    * provider call leaves it PENDING/FAILED instead of silently paying out.
+   *
+   * The balance check + reservation (creating the PENDING payout row) run
+   * inside one transaction guarded by a Postgres advisory lock keyed on
+   * developerId, so two concurrent requests for the same developer
+   * serialize instead of both reading the same "available" balance and
+   * both creating a payout for it.
    */
   app.post("/api/v1/earnings/payout", { preHandler: requireSession }, async (req, reply) => {
     const parsed = QuerySchema.safeParse(req.body);
@@ -109,25 +117,42 @@ export async function registerEarningsRoutes(app: FastifyInstance) {
     if (!developer) return reply.status(404).send({ error: "developer_not_found" });
     if (developer.userId !== req.session!.sub) return reply.status(403).send({ error: "forbidden" });
 
-    const [lifetime, paidOut] = await Promise.all([
-      prisma.developerEarningsLedger.aggregate({ where: { developerId }, _sum: { amountCents: true } }),
-      prisma.payout.aggregate({ where: { developerId, status: "PAID" }, _sum: { amountCents: true } }),
-    ]);
-    const availableCents = (lifetime._sum.amountCents ?? 0) - (paidOut._sum.amountCents ?? 0);
+    const reservation = await prisma.$transaction(async (tx) => {
+      // Serializes concurrent payout requests for this developer; released
+      // automatically when the transaction commits or rolls back.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${developerId}))`;
 
-    if (availableCents < developer.payoutThresholdCents) {
-      return reply.status(400).send({ error: "below_payout_threshold", availableCents, thresholdCents: developer.payoutThresholdCents });
-    }
+      const [lifetime, reservedOrPaid] = await Promise.all([
+        tx.developerEarningsLedger.aggregate({ where: { developerId }, _sum: { amountCents: true } }),
+        tx.payout.aggregate({
+          where: { developerId, status: { in: ["PENDING", "PROCESSING", "PAID"] } },
+          _sum: { amountCents: true },
+        }),
+      ]);
+      const availableCents = (lifetime._sum.amountCents ?? 0) - (reservedOrPaid._sum.amountCents ?? 0);
 
-    const payout = await prisma.payout.create({
-      data: {
-        developerId,
-        amountCents: availableCents,
-        currency: developer.currency,
-        status: "PENDING",
-        provider: payoutProvider.kind,
-      },
+      if (availableCents < developer.payoutThresholdCents) {
+        return { ok: false as const, availableCents };
+      }
+
+      const payout = await tx.payout.create({
+        data: {
+          developerId,
+          amountCents: availableCents,
+          currency: developer.currency,
+          status: "PENDING",
+          provider: payoutProvider.kind,
+        },
+      });
+      return { ok: true as const, payout, availableCents };
     });
+
+    if (!reservation.ok) {
+      return reply
+        .status(400)
+        .send({ error: "below_payout_threshold", availableCents: reservation.availableCents, thresholdCents: developer.payoutThresholdCents });
+    }
+    const { payout, availableCents } = reservation;
 
     const result = await payoutProvider.requestPayout({
       developerId,

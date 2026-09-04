@@ -44,4 +44,23 @@ describe("AdClient", () => {
       client.reportEvent({ eventId: "e1", type: "DISMISS", campaignId: "c1", developerId: "d1" })
     ).resolves.toBeUndefined();
   });
+
+  it("passes an AbortSignal to the fetch call so a slow server can actually be aborted", async () => {
+    // A fetchImpl that never resolves on its own -- it only settles when
+    // its request's AbortSignal fires. If the timeout wiring is cosmetic
+    // (signal constructed but never attached to the real request), this
+    // promise would hang forever and the test would time out.
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) throw new Error("no AbortSignal was passed to fetch");
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+    const client = new AdClient("http://localhost:4000", "test-token", fetchImpl as unknown as typeof fetch);
+    const result = await client.selectAd({ developerId: "dev_1", elapsedSeconds: 10 });
+    expect(result).toBeNull();
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  }, 10000);
 });

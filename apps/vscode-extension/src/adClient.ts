@@ -24,11 +24,19 @@ export interface AdCandidate {
 
 const REQUEST_TIMEOUT_MS = 4000;
 
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+/**
+ * Runs `makeRequest` with an AbortSignal that fires after `ms`, and
+ * degrades to null on abort/error rather than throwing. The request must
+ * be constructed INSIDE this function (not passed in as an already-started
+ * promise) so the AbortController's signal can actually be attached to it
+ * before the request begins -- otherwise the timeout is cosmetic and the
+ * request runs to completion regardless of how long it takes.
+ */
+async function withTimeout<T>(makeRequest: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
-    return await promise;
+    return await makeRequest(controller.signal);
   } catch {
     return null;
   } finally {
@@ -55,11 +63,13 @@ export class AdClient {
 
   async selectAd(context: AdRequestContext): Promise<AdCandidate | null> {
     const result = await withTimeout(
-      this.fetchImpl(`${this.baseUrl}/api/v1/ads/select`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...this.authHeaders() },
-        body: JSON.stringify({ context }),
-      }),
+      (signal) =>
+        this.fetchImpl(`${this.baseUrl}/api/v1/ads/select`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...this.authHeaders() },
+          body: JSON.stringify({ context }),
+          signal,
+        }),
       REQUEST_TIMEOUT_MS
     );
     if (!result || !result.ok) return null;
@@ -80,11 +90,13 @@ export class AdClient {
     viewDurationMs?: number;
   }): Promise<void> {
     await withTimeout(
-      this.fetchImpl(`${this.baseUrl}/api/v1/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...this.authHeaders() },
-        body: JSON.stringify(event),
-      }),
+      (signal) =>
+        this.fetchImpl(`${this.baseUrl}/api/v1/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...this.authHeaders() },
+          body: JSON.stringify(event),
+          signal,
+        }),
       REQUEST_TIMEOUT_MS
     );
   }

@@ -174,4 +174,69 @@ describe("carry-based accounting precision", () => {
     expect(earningsTotal._sum.amountCents).toBe(9);
     expect(developer.earningsCarryMilliCents).toBe(0);
   });
+
+  it("conserves the exact fractional total when qualified views land concurrently, not just serially", async () => {
+    if (!dbAvailable) return;
+
+    // Select all 10 impressions first (serially, so each one is a distinct
+    // impression row), then fire all 10 VIEW_COMPLETE events at once --
+    // the carry's read-increment-resolve-write sequence must still be
+    // exact under concurrent writers to the same campaign/developer rows,
+    // not just when called one at a time.
+    const impressionIds: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const selectRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/ads/select",
+        headers: authHeader(),
+        payload: {
+          context: {
+            developerId: devId,
+            command: "npm",
+            language: "carry-precision-test-lang",
+            elapsedSeconds: 30,
+          },
+        },
+      });
+      const ad = selectRes.json().ad;
+      expect(ad).not.toBeNull();
+      impressionIds.push(ad.impressionId);
+    }
+
+    await Promise.all(
+      impressionIds.map((impressionId) =>
+        app.inject({
+          method: "POST",
+          url: "/api/v1/events",
+          headers: authHeader(),
+          payload: {
+            eventId: randomUUID(),
+            type: "VIEW_COMPLETE",
+            campaignId,
+            impressionId,
+            developerId: devId,
+            viewDurationMs: 3000,
+          },
+        })
+      )
+    );
+
+    const spendTotal = await prisma.campaignSpend.aggregate({
+      where: { campaignId },
+      _sum: { amountCents: true },
+    });
+    const earningsTotal = await prisma.developerEarningsLedger.aggregate({
+      where: { developerId: devId },
+      _sum: { amountCents: true },
+    });
+    const ledgerCount = await prisma.developerEarningsLedger.count({ where: { developerId: devId } });
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+    const developer = await prisma.developerProfile.findUniqueOrThrow({ where: { id: devId } });
+
+    expect(spendTotal._sum.amountCents).toBe(15);
+    expect(campaign.spendCarryMilliCents).toBe(0);
+    expect(earningsTotal._sum.amountCents).toBe(9);
+    expect(developer.earningsCarryMilliCents).toBe(0);
+    expect(ledgerCount).toBe(10); // exactly one ledger row per impression, none lost or duplicated
+  });
 });

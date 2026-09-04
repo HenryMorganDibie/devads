@@ -90,4 +90,37 @@ describe("payouts", () => {
     expect(second.statusCode).toBe(400);
     expect(second.json().error).toBe("below_payout_threshold");
   });
+
+  it("never double-pays when two payout requests for the same developer race concurrently", async () => {
+    if (!dbAvailable) return;
+
+    await prisma.developerEarningsLedger.create({
+      data: { developerId: devId, impressionEventId: randomUUID(), amountCents: 2500, description: "test" },
+    });
+
+    // Fire both requests truly concurrently -- this is exactly the
+    // double-click / retry scenario that a naive check-then-act balance
+    // calculation (read available -> create payout) fails under: both
+    // requests can read the same "available" balance before either
+    // payout row exists.
+    const [first, second] = await Promise.all([
+      app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } }),
+      app.inject({ method: "POST", url: "/api/v1/earnings/payout", headers: authHeader(), payload: { developerId: devId } }),
+    ]);
+
+    const statuses = [first.statusCode, second.statusCode].sort();
+    // Exactly one must succeed (200) and the other must be rejected as
+    // below threshold (400) -- never both succeeding.
+    expect(statuses).toEqual([200, 400]);
+
+    const payouts = await prisma.payout.findMany({ where: { developerId: devId } });
+    expect(payouts.length).toBe(1);
+    expect(payouts[0].amountCents).toBe(2500);
+
+    // Total ever paid must equal the true balance, not 2x it.
+    const paidTotal = payouts
+      .filter((p) => p.status === "PAID")
+      .reduce((sum, p) => sum + p.amountCents, 0);
+    expect(paidTotal).toBeLessThanOrEqual(2500);
+  });
 });
