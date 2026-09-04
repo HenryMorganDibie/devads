@@ -2,19 +2,24 @@
 
 **Turn developer wait time into value.**
 
-DevAds is a developer advertising network. Its first client is a VS Code
-extension that shows a small, tasteful sponsored card during naturally
-occurring wait time -- builds, installs, tests -- and never a moment longer.
-If your build finishes before the minimum wait threshold, you never see an
-ad. Developers opt in, get paid a share of ad revenue, and can turn it off
-in one click.
+DevAds is a developer advertising network:
 
-## Why
+- **Developers** install a VS Code extension, opt in, and earn a revenue
+  share from small, tasteful sponsored cards shown only during wait time
+  they were already spending -- builds, installs, tests. If your command
+  finishes before the minimum wait threshold, you never see an ad, and you
+  can turn it off in one click.
+- **Advertisers** create a campaign, target it by language/framework/
+  runtime/platform/country, and reach developers inside the tool they're
+  already using -- not a webpage, not a pre-roll video.
+- **The platform** takes a configurable cut of advertiser spend and pays
+  the rest to the developer whose wait time earned it, tracked in a
+  transparent, auditable ledger.
 
-Developers already spend real time waiting on their tools. That wait time
-is either wasted or interrupted by unrelated notifications -- DevAds
-monetizes it instead, on the developer's terms, with revenue shared back to
-them.
+VS Code is the first client. The backend is client-agnostic by design --
+see [docs/architecture.md](./docs/architecture.md) for how a CLI,
+JetBrains plugin, or browser extension would plug into the same ad-server
+later.
 
 ## How it works
 
@@ -67,16 +72,23 @@ scripts/       demo.js (one-command setup), demo-wait.js (simulated slow command
 Requires Node 20+, Docker Desktop.
 
 ```bash
-npm install
-npm run demo          # brings up Postgres + MinIO, migrates, seeds demo data
+git clone https://github.com/HenryMorganDibie/devads.git
+cd devads
+cp .env.example .env      # ad-server loads this automatically
+npm install                # also generates the Prisma client (postinstall)
+npm run demo                # brings up Postgres + MinIO, migrates, seeds,
+                             # and builds the packages the ad-server needs
 ```
+
+`npm run demo` is idempotent -- safe to re-run against an already-running
+stack. This whole sequence (including the two commands below) is tested
+from a genuinely fresh `git clone` before every push, not just assumed to
+still work.
 
 Then, in separate terminals:
 
 ```bash
-DATABASE_URL="postgresql://devads:devads@localhost:5442/devads?schema=public" \
-  npm run dev -w @devads/ad-server
-
+npm run dev -w @devads/ad-server
 NEXT_PUBLIC_AD_SERVER_URL=http://localhost:4000 npm run dev -w @devads/web
 NEXT_PUBLIC_AD_SERVER_URL=http://localhost:4000 npm run dev -w @devads/advertiser-dashboard
 NEXT_PUBLIC_AD_SERVER_URL=http://localhost:4000 npm run dev -w @devads/admin-dashboard
@@ -115,38 +127,50 @@ npm test          # unit + integration tests across every workspace (turbo)
 Integration tests run against a real Postgres (the `docker compose up
 postgres` instance) and cover the full campaign → approval → ad selection →
 qualified view → earnings ledger → payout lifecycle, plus idempotency,
-frequency capping, and the auth/ownership guards. Unit tests cover the
-pure targeting engine, money math, and the extension's eligibility logic
-(no VS Code host required).
+frequency capping, concurrent-request safety (payouts, budget enforcement,
+carry accounting -- each proven with real simultaneous HTTP requests, not
+just serial calls), and the auth/ownership guards. Unit tests cover the
+pure targeting engine, money math, object-storage upload validation, and
+the extension's eligibility logic (no VS Code host required). 89 tests
+total, all green from a fresh clone.
 
 ## Revenue model
 
 CPM-based. Advertiser spend splits between platform and developer by a
 configurable basis-points share (`DEFAULT_DEVELOPER_REVENUE_SHARE_BPS`,
 default 60% to developers). All money is stored as integer minor units plus
-a currency code -- never floating point. See
-[docs/architecture.md](./docs/architecture.md#money).
+a currency code -- never floating point, and never lost to per-impression
+rounding (see [docs/architecture.md](./docs/architecture.md#money)).
 
 ## Security
 
-- Client is never authoritative for money, impressions, or eligibility --
-  the ad-server re-derives everything server-side.
+- Client is never authoritative for money, impressions, identity, or
+  eligibility -- the ad-server re-derives everything server-side from the
+  caller's verified session, never from an id in the request body.
 - Event reporting is idempotent (unique `event_id`); a retried/duplicated
   request can't double-pay.
-- Session-token + resource-ownership checks guard developer and earnings
-  endpoints; admin endpoints require an ADMIN-role session. One known
-  remaining gap (advertiser/campaign routes) is documented in
-  [docs/api.md](./docs/api.md).
+- Session-token + resource-ownership checks guard every developer,
+  earnings, campaign, and advertiser route; admin endpoints require an
+  ADMIN-role session.
+- Campaign spend and developer earnings are computed inside
+  Postgres-row-locked transactions and payouts inside an advisory-locked
+  one, so concurrent requests can't double-spend a budget or double-pay a
+  balance -- each guarantee has a dedicated test that fires real
+  concurrent HTTP requests and checks the totals.
+- Creative uploads are validated server-side by MIME type and size, never
+  trusted from the client.
+- Rate limited (300 req/min default, 10/min on auth endpoints).
+- CORS is locked to an explicit origin allowlist (not reflect-any-origin).
 - Money columns carry CHECK constraints at the database level in addition
   to application-level integer-cents handling.
 
 ## Roadmap
 
-Phase 1 (this MVP): VS Code extension, ad server, three dashboards, demo
-mode. Phase 2+: CLI, JetBrains, browser extension, real S3/Stripe
-deployment, creative upload UI, automated fraud anomaly detection. Full
-detail and rationale for what's *not* built yet:
-[docs/architecture.md](./docs/architecture.md#roadmap).
+Phase 1 (this MVP): VS Code extension, ad server, three dashboards, real
+creative upload to object storage, demo mode. Phase 2+: CLI, JetBrains,
+browser extension, real Stripe deployment, video creative rendering,
+automated fraud anomaly detection. Full detail and rationale for what's
+*not* built yet: [docs/architecture.md](./docs/architecture.md#roadmap).
 
 ## License
 

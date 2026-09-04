@@ -16,24 +16,52 @@ function run(cmd, cwd, extraEnv = {}) {
   execSync(cmd, { cwd, stdio: "inherit", env: { ...process.env, ...extraEnv } });
 }
 
-console.log("== DevAds demo setup ==");
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-run("docker compose up -d postgres minio", ROOT);
+// A pure-Node wait loop rather than shelling out to a platform sleep
+// command (`sleep` on POSIX, `timeout /t` in cmd.exe -- but neither exists,
+// or means something different, under Git Bash on Windows, which broke a
+// fresh `npm run demo` run there).
+async function waitForPostgres() {
+  console.log("\nWaiting for Postgres to accept connections...");
+  for (let i = 0; i < 30; i++) {
+    try {
+      execSync("docker exec devads-postgres pg_isready -U devads", { stdio: "ignore" });
+      return;
+    } catch {
+      // not ready yet
+    }
+    await sleep(2000);
+  }
+  console.error("Postgres did not become ready in time");
+  process.exit(1);
+}
 
-console.log("\nWaiting for Postgres to accept connections...");
-execSync(
-  `node -e "` +
-    `const {execSync}=require('child_process');` +
-    `for(let i=0;i<30;i++){try{execSync('docker exec devads-postgres pg_isready -U devads',{stdio:'ignore'});process.exit(0)}catch(e){}` +
-    `require('child_process').execSync(process.platform==='win32'?'timeout /t 2 >nul':'sleep 2')}` +
-    `console.error('Postgres did not become ready in time');process.exit(1)"`,
-  { stdio: "inherit" }
-);
+async function main() {
+  console.log("== DevAds demo setup ==");
 
-run("npx prisma migrate deploy", DB_PACKAGE, { DATABASE_URL });
-run("npx tsx seed/index.ts", DB_PACKAGE, { DATABASE_URL });
+  run("docker compose up -d postgres minio", ROOT);
+  await waitForPostgres();
 
-console.log(`
+  // Belt-and-suspenders: `npm install`'s postinstall already runs this,
+  // but re-running here is cheap and covers anyone who skipped/cached
+  // past that step.
+  run("npx prisma generate", DB_PACKAGE);
+  run("npx prisma migrate deploy", DB_PACKAGE, { DATABASE_URL });
+  run("npx tsx seed/index.ts", DB_PACKAGE, { DATABASE_URL });
+
+  // The ad-server's dev script (tsx watch) imports the OTHER workspace
+  // packages' compiled dist/ output, not their TypeScript source -- so
+  // they must be built at least once before `npm run dev -w @devads/ad-server`
+  // will even start. turbo's build task dependency graph (^build) means
+  // building the ad-server also builds database/shared/targeting/auth
+  // first, in the right order.
+  console.log("\nBuilding workspace packages (needed before `npm run dev` will work)...");
+  run("npx turbo run build --filter=@devads/ad-server", ROOT);
+
+  console.log(`
 == Demo environment ready ==
 
 Start the backend + apps (in separate terminals, or via your process
@@ -61,3 +89,9 @@ Then:
      - Disable DevAds (command palette -> "DevAds: Disable") and re-run
        the command to confirm no ad appears.
 `);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
