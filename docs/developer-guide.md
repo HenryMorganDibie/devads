@@ -1,5 +1,14 @@
 # Developer Guide
 
+> **Note:** the README's card preview is a static mockup. Nobody has yet
+> sat down in a real Extension Development Host, run `node
+> scripts/demo-wait.js 30`, and watched the actual card appear/disappear
+> with fresh eyes -- that pass (does it read as sponsored at a glance,
+> does dismiss/click actually work, does it vanish the instant the command
+> ends) is still open and matters more than any further backend work. If
+> you're reading this and about to try it, that first real run *is* the
+> test -- no separate setup needed beyond the steps below.
+
 ## Install
 
 1. `npm run package -w @devads/vscode-extension` to build `devads-0.1.0.vsix`

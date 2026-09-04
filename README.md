@@ -21,6 +21,22 @@ see [docs/architecture.md](./docs/architecture.md) for how a CLI,
 JetBrains plugin, or browser extension would plug into the same ad-server
 later.
 
+```
+$ npm run build
+  building...
+
+                                          ┌──────────────────────────────┐
+                                          │ SPONSORED                    │
+                                          │ Ship faster with Acme Cloud  │
+                                          │ Zero-config deploys for Node │
+                                          │ [ Learn more ]               │
+                                          └──────────────────────────────┘
+  build complete ✓
+```
+
+*(Static mockup of the VS Code status-bar card -- a real recording is on
+the list; see the note in [docs/developer-guide.md](./docs/developer-guide.md).)*
+
 ## How it works
 
 ```
