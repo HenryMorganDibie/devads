@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, loadSession } from "../../../lib/api";
+import { apiPost, apiUpload, loadSession } from "../../../lib/api";
 
 function csv(value: string): string[] {
   return value
@@ -24,8 +24,16 @@ export default function NewCampaignPage() {
   const [body, setBody] = useState("");
   const [ctaLabel, setCtaLabel] = useState("Learn more");
   const [ctaUrl, setCtaUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0] ?? null;
+    setFile(selected);
+    setPreviewUrl(selected ? URL.createObjectURL(selected) : null);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,13 +61,39 @@ export default function NewCampaignPage() {
       setLoading(false);
       return;
     }
+    const campaignId = createRes.data.id;
 
-    const creativeRes = await apiPost(`/api/v1/campaigns/${createRes.data.id}/creatives`, {
+    let uploadFields: { imageKey?: string; mimeType?: string; sizeBytes?: number } = {};
+    if (file) {
+      const uploadRes = await apiUpload<{ key: string; mimeType: string; sizeBytes: number; error?: string }>(
+        `/api/v1/campaigns/${campaignId}/upload?kind=IMAGE`,
+        file
+      );
+      if (!uploadRes.ok) {
+        setError(
+          uploadRes.data.error === "unsupported_mime_type"
+            ? "That file type isn't supported (use PNG, JPEG, WebP, or GIF)."
+            : uploadRes.data.error === "file_too_large"
+              ? "That file is too large (max 5MB)."
+              : "Image upload failed."
+        );
+        setLoading(false);
+        return;
+      }
+      uploadFields = {
+        imageKey: uploadRes.data.key,
+        mimeType: uploadRes.data.mimeType,
+        sizeBytes: uploadRes.data.sizeBytes,
+      };
+    }
+
+    const creativeRes = await apiPost(`/api/v1/campaigns/${campaignId}/creatives`, {
       type: "IMAGE",
       headline,
       body: body || undefined,
       ctaLabel,
       ctaUrl,
+      ...uploadFields,
     });
 
     if (!creativeRes.ok) {
@@ -68,7 +102,7 @@ export default function NewCampaignPage() {
       return;
     }
 
-    await apiPost(`/api/v1/campaigns/${createRes.data.id}/submit`, {});
+    await apiPost(`/api/v1/campaigns/${campaignId}/submit`, {});
 
     setLoading(false);
     router.push("/campaigns");
@@ -119,10 +153,27 @@ export default function NewCampaignPage() {
             <input className="input" placeholder="CTA label" value={ctaLabel} onChange={(e) => setCtaLabel(e.target.value)} required />
             <input className="input" type="url" placeholder="https://yourproduct.com" value={ctaUrl} onChange={(e) => setCtaUrl(e.target.value)} required />
           </div>
-          <p className="text-xs text-muted">
-            Image/video upload will be wired to object storage in a follow-up; this creates the
-            campaign and creative record now, submitted for admin review.
-          </p>
+          <div>
+            <span className="text-xs text-muted block mb-1">Image (optional, PNG/JPEG/WebP/GIF, max 5MB)</span>
+            <input
+              className="input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={onFileChange}
+            />
+          </div>
+          {previewUrl && (
+            <div className="pt-2">
+              <p className="text-xs text-muted mb-2">Creative preview</p>
+              <div className="card p-3 max-w-xs">
+                <p className="text-[10px] uppercase tracking-wide text-muted mb-1">Sponsored</p>
+                <img src={previewUrl} alt="Creative preview" className="rounded mb-2 max-h-24 object-cover" />
+                <p className="text-sm font-medium">{headline || "Your headline here"}</p>
+                {body && <p className="text-xs text-muted mt-1">{body}</p>}
+                <p className="text-xs text-accent mt-2">{ctaLabel || "Learn more"}</p>
+              </div>
+            </div>
+          )}
         </fieldset>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

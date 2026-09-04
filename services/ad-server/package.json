@@ -18,6 +18,9 @@
     "@devads/auth": "*",
     "fastify": "^4.28.1",
     "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@aws-sdk/client-s3": "^3.658.1",
+    "@aws-sdk/s3-request-presigner": "^3.658.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -12,10 +12,14 @@ target by language, framework, runtime, platform, and country.
 2. **New campaign**: set a name, CPM (cost per 1,000 impressions), optional
    daily/total budget, and targeting (languages, frameworks, countries --
    leave any field blank to match everything).
-3. Add a creative: headline, optional body copy, CTA label, and destination
-   URL. (Image/video upload to object storage is not wired into the UI yet
-   in this MVP -- see [architecture.md](./architecture.md#roadmap) --
-   creatives currently ship with headline/body/CTA only.)
+3. Add a creative: headline, optional body copy, CTA label, destination
+   URL, and (optional) an image -- PNG/JPEG/WebP/GIF up to 5MB. Uploaded
+   images are validated server-side (MIME type + size, never trusted from
+   the browser) and stored in object storage; the dashboard shows a live
+   preview before you submit. Video upload isn't wired into the UI yet
+   (the VIDEO creative type and its storage path exist end to end, but the
+   v1 VS Code status-bar surface only renders text/image content anyway --
+   see [architecture.md](./architecture.md#roadmap)).
 4. Submit. Your campaign moves to **Submitted** and enters the admin review
    queue.
 

@@ -50,6 +50,20 @@ export async function apiGet<T>(path: string): Promise<{ ok: boolean; status: nu
   return { ok: res.ok, status: res.status, data };
 }
 
+/** Uploads a single file as multipart/form-data. Never set Content-Type
+ * manually here -- the browser must generate the multipart boundary. */
+export async function apiUpload<T>(path: string, file: File): Promise<{ ok: boolean; status: number; data: T }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${AD_SERVER_URL}${path}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  const data = (await res.json().catch(() => ({}))) as T;
+  return { ok: res.ok, status: res.status, data };
+}
+
 export function formatCents(cents: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }

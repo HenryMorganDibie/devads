@@ -5,6 +5,7 @@ import { CreateCampaignSchema } from "@devads/shared";
 import { hashPassword, signSession } from "@devads/auth";
 import { config } from "../lib/config.js";
 import { requireAdmin, requireSession } from "../lib/authGuard.js";
+import { getCreativeUrl, uploadCreativeFile, validateCreativeUpload } from "../lib/storage.js";
 
 const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 
@@ -130,6 +131,55 @@ export async function registerCampaignsRoutes(app: FastifyInstance) {
       data: { campaignId: campaign.id, ...parsed.data },
     });
     return reply.send(creative);
+  });
+
+  /**
+   * POST /api/v1/campaigns/:id/upload
+   *
+   * Accepts a single multipart file (image or video), validates MIME type
+   * and size server-side (never trusts the client's declared content type
+   * or a file extension), and uploads it to object storage. Returns the
+   * storage key + real detected size for the caller to pass into
+   * POST .../creatives -- kept as a separate step so creative metadata
+   * (headline, CTA, etc.) can be created/edited without re-uploading.
+   */
+  app.post("/api/v1/campaigns/:id/upload", { preHandler: requireSession }, async (req, reply) => {
+    const params = AdminActionParams.safeParse(req.params);
+    if (!params.success) return reply.status(400).send({ error: "invalid_request" });
+
+    const campaign = await prisma.campaign.findUnique({ where: { id: params.data.id } });
+    if (!campaign) return reply.status(404).send({ error: "campaign_not_found" });
+    if (!(await isAdvertiserMember(req.session!.sub, campaign.advertiserId))) {
+      return reply.status(403).send({ error: "forbidden" });
+    }
+    if (campaign.status !== "DRAFT") return reply.status(409).send({ error: "campaign_not_editable" });
+
+    const kindQuery = z.object({ kind: z.enum(["IMAGE", "VIDEO"]).default("IMAGE") }).safeParse(req.query);
+    const kind = kindQuery.success ? kindQuery.data.kind : "IMAGE";
+
+    const file = await req.file();
+    if (!file) return reply.status(400).send({ error: "no_file_uploaded" });
+
+    const buffer = await file.toBuffer();
+    const validationError = validateCreativeUpload(file.mimetype, buffer.length, kind);
+    if (validationError) return reply.status(400).send(validationError);
+
+    const key = await uploadCreativeFile(campaign.id, file.mimetype, buffer);
+    return reply.send({ key, mimeType: file.mimetype, sizeBytes: buffer.length });
+  });
+
+  app.get("/api/v1/creatives/:id/url", { preHandler: requireSession }, async (req, reply) => {
+    const params = AdminActionParams.safeParse(req.params);
+    if (!params.success) return reply.status(400).send({ error: "invalid_request" });
+
+    const creative = await prisma.campaignCreative.findUnique({ where: { id: params.data.id } });
+    if (!creative) return reply.status(404).send({ error: "creative_not_found" });
+
+    const key = creative.imageKey ?? creative.videoKey;
+    if (!key) return reply.status(404).send({ error: "no_uploaded_file" });
+
+    const url = await getCreativeUrl(key);
+    return reply.send({ url });
   });
 
   app.post("/api/v1/campaigns/:id/submit", { preHandler: requireSession }, async (req, reply) => {

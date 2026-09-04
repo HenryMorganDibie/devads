@@ -65,9 +65,16 @@ the caller happening to supply the right id in the request:
 - `/api/v1/developers/*` (preferences, data export, account deletion),
   `/api/v1/earnings/*` (balance, payout requests): require the session's
   user to own the developer profile being accessed.
-- `/api/v1/campaigns/*` (create, add creative, submit, list),
+- `/api/v1/campaigns/*` (create, add creative, upload, submit, list),
   `/api/v1/advertisers/signup`: require the session's user to be a member
-  (`advertiser_members`) of the `advertiserId` being acted on.
+  (`advertiser_members`) of the `advertiserId` being acted on. Uploads are
+  further gated to `DRAFT` campaigns only, and validated server-side by
+  MIME type + size (PNG/JPEG/WebP/GIF up to 5MB, MP4/WebM up to 25MB) --
+  never trusted from the client's declared content type.
+- `GET /api/v1/creatives/:id/url`: requires any valid session (not
+  advertiser-membership-scoped) and returns a time-limited signed URL for
+  the creative's stored file -- creatives aren't sensitive per-advertiser
+  data, but the bucket itself is never public.
 - `/api/v1/admin/*`: requires an ADMIN-role session.
 
 Covered by `authGuard.integration.test.ts` (401 with no token, 403 for a

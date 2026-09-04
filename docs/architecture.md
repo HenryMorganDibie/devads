@@ -107,11 +107,17 @@ than double-counted.
 - **Real S3/Stripe**: `PayoutProvider`/`BillingProvider` are real Stripe SDK
   implementations gated behind env vars (`PAYOUT_PROVIDER=stripe` +
   `STRIPE_SECRET_KEY`), defaulting to a deterministic `Mock` implementation.
-  Object storage is written against the S3 API via MinIO locally; swapping
-  to AWS S3 is a config change, not a code change -- but the creative
-  upload UI itself (drag-and-drop -> presigned URL -> MinIO/S3) is not
-  wired up yet; campaigns currently store `imageKey`/`videoKey` as plain
-  strings entered via the API.
+  Object storage is written against the S3 API (`@aws-sdk/client-s3`) via
+  MinIO locally; swapping to AWS S3 is a config change (unset
+  `S3_ENDPOINT`), not a code change. Creative image upload IS wired end to
+  end: the advertiser dashboard uploads a file via
+  `POST /api/v1/campaigns/:id/upload` (server-side MIME type + size
+  validation, never trusted from the client), the ad-server stores it in
+  the bucket and returns a storage key, and `GET /api/v1/creatives/:id/url`
+  resolves a time-limited signed URL for rendering it -- verified with a
+  real upload -> signed-URL -> download round-trip against a live MinIO.
+  Video upload isn't wired into the UI (the VIDEO creative type and
+  storage path exist, but no client renders video yet).
 - **Automated fraud anomaly detection** (velocity/device-fingerprint
   scoring beyond min-view-duration + idempotency + frequency caps): the
   `fraud_flags` table and admin review UI hook exist; the detection rules
