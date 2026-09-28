@@ -180,3 +180,36 @@ export function createBillingProvider(kind: string | undefined, stripeSecretKey?
   if (kind === "stripe" && stripeSecretKey) return new StripeBillingProvider(stripeSecretKey);
   return new MockBillingProvider();
 }
+
+// ---------------------------------------------------------------------------
+// RedemptionProvider: SEAM ONLY (sponsorship Phase 1 defers redemption).
+//
+// Future implementations turn wallet units of a given reward type into
+// something the developer can use (credits at a tool/compute vendor, a
+// discount code, cash via an existing PayoutProvider, ...). No
+// implementation, factory or env var exists yet on purpose; the reward
+// ledger already reserves the REDEEMED entry type for when one does. A
+// redemption route should follow the /api/v1/earnings/payout pattern:
+// per-developer advisory lock, server-recomputed balance, PENDING row
+// first, provider call, then status update from the provider result.
+// ---------------------------------------------------------------------------
+
+export interface RedemptionRequest {
+  developerId: string;
+  /** Opaque reward type value (mirrors RewardType); providers declare which they support. */
+  rewardType: string;
+  amountUnits: number;
+  destinationRef?: string;
+}
+
+export interface RedemptionResult {
+  providerRef: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  failureReason?: string;
+}
+
+export interface RedemptionProvider {
+  readonly kind: string;
+  supportsRewardType(rewardType: string): boolean;
+  redeem(req: RedemptionRequest): Promise<RedemptionResult>;
+}

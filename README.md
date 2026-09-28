@@ -79,7 +79,7 @@ packages/
 services/
   ad-server/   Fastify API -- the one place all money/eligibility logic lives
 
-docs/          architecture, privacy, advertiser guide, developer guide, OpenAPI spec
+docs/          architecture, sponsorship architecture, privacy, advertiser guide, developer guide, OpenAPI spec
 scripts/       demo.js (one-command setup), demo-wait.js (simulated slow command)
 ```
 
@@ -187,6 +187,11 @@ creative upload to object storage, demo mode. Phase 2+: CLI, JetBrains,
 browser extension, real Stripe deployment, video creative rendering,
 automated fraud anomaly detection. Full detail and rationale for what's
 *not* built yet: [docs/architecture.md](./docs/architecture.md#roadmap).
+
+Sponsorships (additive, server-side foundation): a provider-agnostic
+developer sponsorship domain (development sessions, sponsored offers,
+reward ledger and wallet) that sits alongside the ad system without
+changing it. See [docs/sponsorship-architecture.md](./docs/sponsorship-architecture.md).
 
 ## License
 

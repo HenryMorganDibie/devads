@@ -107,6 +107,13 @@ model DeveloperProfile {
   impressions    AdImpression[]
   events         AdEvent[]
 
+  // Sponsorship domain back-relations (relation-only fields; no columns on
+  // developer_profiles). See the "Sponsorships" section at the end of this file.
+  developmentSessions DevelopmentSession[]
+  sponsorshipEvents   SponsorshipEvent[]
+  rewardWallets       DeveloperRewardWallet[]
+  rewardLedger        DeveloperRewardLedger[]
+
   @@map("developer_profiles")
 }
 
@@ -121,6 +128,9 @@ model Advertiser {
   members        AdvertiserMember[]
   campaigns      Campaign[]
   billingAccount AdvertiserBillingAccount?
+
+  // Sponsorship domain back-relation (relation-only field; no column on advertisers).
+  sponsorshipCampaigns SponsorshipCampaign[]
 
   @@map("advertisers")
 }
@@ -418,4 +428,257 @@ model PrivacyConsent {
 
   @@index([userId])
   @@map("privacy_consents")
+}
+
+// ---------------------------------------------------------------------------
+// Sponsorships (provider-agnostic developer sponsorship domain)
+//
+// Fully separate from the ad/campaign domain above: its own campaigns,
+// offers, events, spend accounting and reward ledger. It reuses only the
+// identities (DeveloperProfile = who earns, Advertiser = organization that
+// pays) and the same integrity techniques (DB-unique idempotency keys,
+// campaign row lock + soft-cap budget, milli-cent carry). Nothing here is
+// specific to any AI provider, sponsor category, reward type or client.
+// See docs/sponsorship-architecture.md.
+// ---------------------------------------------------------------------------
+
+enum DevClientType {
+  VS_CODE
+  CLAUDE_CODE
+  CODEX
+  GEMINI
+  CURSOR
+  OPENCODE
+  AIDER
+  CUSTOM_AGENT
+  LOCAL_AGENT
+  OTHER
+}
+
+enum DevSessionStatus {
+  ACTIVE
+  ENDED
+}
+
+enum SponsorshipCampaignStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAUSED
+  ARCHIVED
+}
+
+enum SponsorshipObjective {
+  AWARENESS
+  QUALIFIED_ENGAGEMENT
+  PRODUCT_DISCOVERY
+  TRIAL_ACTIVATION
+  OTHER
+}
+
+enum RewardType {
+  AI_CREDITS
+  API_CREDITS
+  COMPUTE_CREDITS
+  TOOL_CREDITS
+  CASH
+  DISCOUNT
+  SUBSCRIPTION_CREDIT
+  OTHER
+}
+
+enum SponsoredOfferStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SponsorshipEventType {
+  OFFER_REQUESTED
+  OFFER_DISPLAYED
+  OFFER_SKIPPED
+  OFFER_OPENED
+  OFFER_INTERACTED
+  OFFER_COMPLETED
+}
+
+enum RewardStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVERSED
+}
+
+enum RewardLedgerEntryType {
+  EARNED
+  REVERSED
+  REDEEMED
+  EXPIRED
+  ADJUSTMENT
+}
+
+/// A coarse record that a developer is working in some client. Never holds
+/// source code, prompts, file names or command arguments.
+model DevelopmentSession {
+  id               String           @id @default(cuid())
+  developerId      String
+  developer        DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  clientType       DevClientType
+  clientVersion    String?
+  status           DevSessionStatus @default(ACTIVE)
+  activityCategory String? // coarse label only (e.g. "build", "test"), validated server-side
+  startedAt        DateTime         @default(now())
+  endedAt          DateTime?
+
+  events SponsorshipEvent[]
+
+  @@index([developerId, status])
+  @@map("development_sessions")
+}
+
+model SponsorshipCampaign {
+  id                   String                    @id @default(cuid())
+  advertiserId         String
+  advertiser           Advertiser                @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  name                 String
+  // Free-form, optional, descriptive only. Core logic never requires or
+  // branches on a specific value (no hard-coded sponsor-category list).
+  sponsorCategory      String?
+  objective            SponsorshipObjective
+  // What the developer earns per qualifying completion, in integer units of
+  // rewardType (e.g. credits). Independent of sponsorChargeCents.
+  rewardType           RewardType
+  rewardAmountUnits    Int
+  // What the sponsor is charged per qualifying completion, in integer cents.
+  sponsorChargeCents   Int
+  currency             String                    @default("USD")
+  totalBudgetCents     Int?
+  dailyBudgetCents     Int?
+  developerDailyCap    Int? // max rewarded completions per developer per UTC day
+  developerLifetimeCap Int? // max rewarded completions per developer, ever
+  frequencyCapPerDay   Int? // max displays per developer per UTC day (null = platform default)
+  eligibleClientTypes  DevClientType[]           @default([]) // empty = all clients
+  startDate            DateTime                  @default(now())
+  endDate              DateTime?
+  status               SponsorshipCampaignStatus @default(DRAFT)
+  // Same milli-cent carry technique as Campaign.spendCarryMilliCents. The
+  // UPDATE on this column is also what takes the campaign row lock in the
+  // completion transaction.
+  spendCarryMilliCents Int                       @default(0)
+  rejectionReason      String?
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  offers SponsoredOffer[]
+  events SponsorshipEvent[]
+  spend  SponsorshipCampaignSpend[]
+  ledger DeveloperRewardLedger[]
+
+  @@index([advertiserId, status])
+  @@index([status])
+  @@map("sponsorship_campaigns")
+}
+
+model SponsoredOffer {
+  id             String               @id @default(cuid())
+  campaignId     String
+  campaign       SponsorshipCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  title          String
+  description    String
+  ctaUrl         String
+  requiredAction String? // human-readable description of the qualifying action
+  expiresAt      DateTime?
+  status         SponsoredOfferStatus @default(ACTIVE)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  events SponsorshipEvent[]
+
+  @@index([campaignId])
+  @@map("sponsored_offers")
+}
+
+/// Idempotent via eventId, exactly like AdEvent.eventId. OFFER_DISPLAYED rows
+/// are created server-side only (the analogue of an ad IMPRESSION).
+model SponsorshipEvent {
+  id          String               @id @default(cuid())
+  eventId     String               @unique
+  type        SponsorshipEventType
+  offerId     String
+  offer       SponsoredOffer       @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  // Denormalized from offer.campaignId so per-campaign frequency caps can be
+  // counted with a single indexed query.
+  campaignId  String
+  campaign    SponsorshipCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  developerId String
+  developer   DeveloperProfile     @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  sessionId   String?
+  session     DevelopmentSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  // For client-reported events: the server-issued OFFER_DISPLAYED eventId
+  // this interaction refers to.
+  displayEventId String?
+  metadata    Json?
+  createdAt   DateTime             @default(now())
+
+  rewardLedgerEntry DeveloperRewardLedger?
+
+  @@index([offerId, developerId, createdAt])
+  @@index([campaignId, developerId, createdAt])
+  @@map("sponsorship_events")
+}
+
+/// Mirrors CampaignSpend, kept fully separate from ad-campaign spend.
+model SponsorshipCampaignSpend {
+  id          String              @id @default(cuid())
+  campaignId  String
+  campaign    SponsorshipCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  amountCents Int
+  currency    String              @default("USD")
+  reason      String              @default("SPONSORSHIP_COMPLETION")
+  createdAt   DateTime            @default(now())
+
+  @@index([campaignId, createdAt])
+  @@map("sponsorship_campaign_spend")
+}
+
+/// Maintained cache of the ledger balance, one row per (developer, rewardType).
+/// The ledger is the source of truth.
+model DeveloperRewardWallet {
+  id             String           @id @default(cuid())
+  developerId    String
+  developer      DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  rewardType     RewardType
+  availableUnits Int              @default(0)
+  pendingUnits   Int              @default(0)
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([developerId, rewardType])
+  @@map("developer_reward_wallets")
+}
+
+model DeveloperRewardLedger {
+  id          String                @id @default(cuid())
+  developerId String
+  developer   DeveloperProfile      @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  rewardType  RewardType
+  campaignId  String
+  campaign    SponsorshipCampaign   @relation(fields: [campaignId], references: [id])
+  // Ties an EARNED entry 1:1 to the server-issued OFFER_DISPLAYED event it
+  // rewards, exactly like DeveloperEarningsLedger.impressionEventId: a
+  // replayed or re-keyed completion for the same display can never produce
+  // a second EARNED row. Null for non-event entries (future reversals,
+  // redemptions, adjustments).
+  sponsorshipEventId String?        @unique
+  sponsorshipEvent   SponsorshipEvent? @relation(fields: [sponsorshipEventId], references: [eventId])
+  entryType   RewardLedgerEntryType
+  amountUnits Int
+  status      RewardStatus
+  description String?
+  createdAt   DateTime              @default(now())
+
+  @@index([developerId, rewardType, createdAt])
+  @@index([developerId, campaignId, createdAt])
+  @@map("developer_reward_ledger")
 }

@@ -8,6 +8,8 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerEarningsRoutes } from "./routes/earnings.js";
 import { registerCampaignsRoutes } from "./routes/campaigns.js";
 import { registerDeveloperRoutes } from "./routes/developers.js";
+import { registerSponsorshipRoutes } from "./routes/sponsorships.js";
+import { registerSponsorshipCampaignRoutes } from "./routes/sponsorshipCampaigns.js";
 import { attachSession } from "./lib/authGuard.js";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // matches storage.ts's video cap; images are checked again after upload
@@ -45,6 +47,8 @@ export async function buildApp() {
   await registerEarningsRoutes(app);
   await registerCampaignsRoutes(app);
   await registerDeveloperRoutes(app);
+  await registerSponsorshipRoutes(app);
+  await registerSponsorshipCampaignRoutes(app);
 
   return app;
 }
