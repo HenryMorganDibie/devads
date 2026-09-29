@@ -31,6 +31,18 @@ sponsor campaign -> developer engagement -> verified outcome -> developer reward
   charge and the developer's reward independently, and the fee is the
   difference.
 
+### See it work (25 s)
+
+[![Product demo: a build runs in VS Code, a DevAds Beta video offer that fits the wait appears beside the editor, the developer opens the project page, the server verifies the action, and 25 Beta Credits land in the wallet](docs/demo/devads-demo.gif)](docs/demo/devads-demo.mp4)
+
+A build starts → DevAds serves an offer that fits the wait → the developer
+engages → the server verifies → the wallet updates.
+([MP4](docs/demo/devads-demo.mp4)) The VS Code frame is a rendered
+walkthrough; the offer text, the video playing in it and the browser steps
+are the real DevAds creative and screens from a local run. The offer shown
+is a DevAds-funded beta opportunity, not an external sponsor. Rendered by
+`tools/beta-creatives/render-demo.mjs`.
+
 ### The first use case: wait-time sponsored cards in VS Code
 
 The first product built on this infrastructure is the VS Code extension. It

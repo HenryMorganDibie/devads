@@ -53,6 +53,14 @@ npm run seed:beta -w @devads/database   # (from the repo root) sync creative row
 The tool is not a workspace package, so it adds nothing to the apps'
 dependencies. Set `CHROMIUM_PATH` if Chromium is not at the default path.
 
+### The README demo is separate
+
+`docs/demo/devads-demo.{mp4,gif}` is a 25 s product demo of the whole
+flow (build, offer, engagement, verification, wallet), rendered by
+`render-demo.mjs` from `demo.html`. It embeds the real Schema-Watch 15 s
+creative and real screenshots of the web app (`demo-assets/`). It is not a
+campaign creative and is never served as an ad.
+
 ## How a video is delivered
 
 The protocol carries the creative; no client hard-codes any video.
