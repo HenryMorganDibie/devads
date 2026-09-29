@@ -80,7 +80,7 @@ packages/
 services/
   ad-server/   Fastify API -- the one place all money/eligibility logic lives
 
-docs/          architecture, sponsorship architecture, client adapters, privacy, advertiser guide, developer guide, OpenAPI spec
+docs/          architecture, sponsorship architecture, client adapters, redemption, privacy, advertiser guide, developer guide, OpenAPI spec
 scripts/       demo.js (one-command setup), demo-wait.js (simulated slow command)
 ```
 
@@ -198,6 +198,8 @@ The VS Code extension is the only client wired to it so far (through
 wait and list the developer's reward wallet. No other editor or agent
 integration exists yet; the adapter boundary for building one, and what
 each would legitimately require, is in [docs/adapters.md](./docs/adapters.md).
+Developers can redeem reward units when an operator enables a redemption
+provider (today: operator-fulfilled `manual`); see [docs/redemption.md](./docs/redemption.md).
 
 ## License
 

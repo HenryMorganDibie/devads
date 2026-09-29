@@ -12,7 +12,9 @@ import { registerSponsorshipRoutes } from "./routes/sponsorships.js";
 import { registerSponsorshipCampaignRoutes } from "./routes/sponsorshipCampaigns.js";
 import { registerSponsorshipOfferListingRoutes } from "./routes/sponsorshipOffers.js";
 import { registerSponsorshipAdminActivityRoutes } from "./routes/sponsorshipAdminActivity.js";
+import { registerRedemptionRoutes } from "./routes/redemptions.js";
 import { attachSession } from "./lib/authGuard.js";
+import { createRedemptionProvider, type RedemptionProvider } from "@devads/shared";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // matches storage.ts's video cap; images are checked again after upload
 
@@ -30,7 +32,15 @@ const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
   : DEFAULT_ALLOWED_ORIGINS;
 
-export async function buildApp() {
+export interface BuildAppOptions {
+  /**
+   * Reward redemption provider. Defaults to REDEMPTION_PROVIDER ("manual" or
+   * "mock"); unset means redemption is disabled. null disables explicitly.
+   */
+  redemptionProvider?: RedemptionProvider | null;
+}
+
+export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: allowedOrigins });
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
@@ -53,6 +63,12 @@ export async function buildApp() {
   await registerSponsorshipCampaignRoutes(app);
   await registerSponsorshipOfferListingRoutes(app);
   await registerSponsorshipAdminActivityRoutes(app);
+  await registerRedemptionRoutes(app, {
+    provider:
+      options.redemptionProvider !== undefined
+        ? options.redemptionProvider
+        : createRedemptionProvider(process.env.REDEMPTION_PROVIDER),
+  });
 
   return app;
 }

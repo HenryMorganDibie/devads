@@ -204,7 +204,10 @@ export const RewardWalletBalanceSchema = z.object({
 export const RewardLedgerEntryDTOSchema = z.object({
   id: z.string(),
   rewardType: RewardTypeSchema,
-  campaignId: z.string(),
+  /** The campaign that paid for an EARNED entry; null for redemption debits and their refunds. */
+  campaignId: z.string().nullable(),
+  /** The redemption a REDEEMED debit (or its refunding ADJUSTMENT) belongs to; absent/null otherwise. */
+  redemptionId: z.string().nullable().optional(),
   entryType: RewardLedgerEntryTypeSchema,
   amountUnits: z.number().int(),
   status: RewardStatusSchema,
@@ -217,6 +220,82 @@ export const RewardWalletResponseSchema = z.object({
   recentLedger: z.array(RewardLedgerEntryDTOSchema),
 });
 export type RewardWalletResponse = z.infer<typeof RewardWalletResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Redemption
+//
+// A developer turns wallet units of one reward type into something usable,
+// through whichever RedemptionProvider the operator configured. The request
+// carries only what the developer chooses (which reward type, how many
+// units) and an idempotency key; the provider, status and every balance
+// check are server-side.
+// ---------------------------------------------------------------------------
+
+export const RedemptionStatusSchema = z.enum(["PENDING", "PROCESSING", "COMPLETED", "FAILED"]);
+export type RedemptionStatusDTO = z.infer<typeof RedemptionStatusSchema>;
+
+export const RedeemRewardRequestSchema = z.object({
+  developerId: z.string().min(1),
+  rewardType: RewardTypeSchema,
+  amountUnits: z.number().int().positive().max(1_000_000_000),
+  /** Client-generated; a retry with the same key returns the original redemption. */
+  idempotencyKey: z.string().min(8).max(128),
+});
+export type RedeemRewardRequest = z.infer<typeof RedeemRewardRequestSchema>;
+
+export const RewardRedemptionDTOSchema = z.object({
+  id: z.string(),
+  rewardType: RewardTypeSchema,
+  amountUnits: z.number().int().positive(),
+  provider: z.string(),
+  status: RedemptionStatusSchema,
+  /** Provider or operator reference for the delivered value (e.g. a fulfilment id); null until known. */
+  providerRef: z.string().nullable(),
+  failureReason: z.string().nullable(),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+export type RewardRedemptionDTO = z.infer<typeof RewardRedemptionDTOSchema>;
+
+export const RedeemRewardResponseSchema = z.object({
+  redemption: RewardRedemptionDTOSchema,
+  /** True when this request replayed an existing idempotency key and nothing new was debited. */
+  idempotent: z.boolean(),
+});
+export type RedeemRewardResponse = z.infer<typeof RedeemRewardResponseSchema>;
+
+export const RewardRedemptionListResponseSchema = z.object({
+  /** False when the operator has not configured a redemption provider; redeeming is then refused. */
+  redemptionEnabled: z.boolean(),
+  /** Reward types the configured provider can redeem; empty when disabled. */
+  redeemableRewardTypes: z.array(RewardTypeSchema),
+  redemptions: z.array(RewardRedemptionDTOSchema),
+});
+export type RewardRedemptionListResponse = z.infer<typeof RewardRedemptionListResponseSchema>;
+
+/** Admin view of a redemption: the developer it belongs to is included. */
+export const AdminRewardRedemptionDTOSchema = RewardRedemptionDTOSchema.extend({
+  developerId: z.string(),
+});
+export type AdminRewardRedemptionDTO = z.infer<typeof AdminRewardRedemptionDTOSchema>;
+
+export const AdminRedemptionListRequestSchema = z.object({
+  status: RedemptionStatusSchema.optional(),
+});
+
+export const AdminRedemptionListResponseSchema = z.object({
+  redemptions: z.array(AdminRewardRedemptionDTOSchema),
+});
+export type AdminRedemptionListResponse = z.infer<typeof AdminRedemptionListResponseSchema>;
+
+export const AdminCompleteRedemptionRequestSchema = z.object({
+  /** Operator's fulfilment reference (e.g. an internal ticket id). Never a secret or a code the developer redeems. */
+  providerRef: z.string().min(1).max(200).optional(),
+});
+
+export const AdminFailRedemptionRequestSchema = z.object({
+  reason: z.string().min(1).max(200),
+});
 
 // ---------------------------------------------------------------------------
 // Sponsor-facing campaign management

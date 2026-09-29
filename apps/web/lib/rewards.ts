@@ -41,7 +41,8 @@ export interface RewardBalance {
 export interface RewardLedgerEntry {
   id: string;
   rewardType: RewardType;
-  campaignId: string;
+  /** Null for redemption debits and their refunds, which belong to no campaign. */
+  campaignId: string | null;
   entryType: LedgerEntryType;
   amountUnits: number;
   status: RewardStatus;
@@ -278,7 +279,7 @@ export function isRewardWalletResponse(v: unknown): v is RewardWalletResponse {
     (e) =>
       isObject(e) &&
       typeof e.id === "string" &&
-      typeof e.campaignId === "string" &&
+      (e.campaignId === null || typeof e.campaignId === "string") &&
       typeof e.createdAt === "string" &&
       isOneOf(REWARD_TYPES, e.rewardType) &&
       isOneOf(LEDGER_ENTRY_TYPES, e.entryType) &&

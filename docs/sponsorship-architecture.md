@@ -131,6 +131,8 @@ completion transaction, so the two can't drift apart.
 - **Redemption.** Only the `RedemptionProvider` interface exists (in
   `packages/shared/src/providers.ts`), plus the `REDEEMED` ledger entry type.
   There is no implementation, factory, env var or route.
+  *Built in Phase 7 with a manual (operator-fulfilled) provider; see
+  [redemption.md](./redemption.md).*
 - **Reversals, expiry and adjustments.** The entry types exist, but no code
   writes them. The ledger column `sponsorshipEventId` is nullable so those
   entries can exist later.
@@ -673,3 +675,25 @@ Not done here, deliberately:
   enum already leaves room for them.
 - **Cursor attribution.** If the VS Code extension runs in Cursor (untested),
   it reports `VS_CODE`.
+
+## Reward redemption (Phase 7)
+
+Full design: [redemption.md](./redemption.md). Summary:
+
+- Developers redeem wallet units from the Rewards page or through
+  `DevAdsClient.redeemReward()`. The server recomputes the balance from the
+  ledger under the developer's wallet lock, writes a `RewardRedemption` and a
+  `REDEEMED` ledger debit in one transaction, calls the configured provider,
+  and on failure appends a compensating `ADJUSTMENT` credit. Idempotency key,
+  lock, conditional decrement and DB constraints make double debits,
+  overdrafts and double refunds impossible.
+- `REDEMPTION_PROVIDER` selects `manual` (operators fulfil and settle from
+  the admin dashboard's Redemptions page) or `mock` (dev only). Unset
+  disables redemption; there is no fallback.
+- Schema: new `reward_redemptions` table; the ledger gains a nullable
+  `redemptionId` and its `campaignId` becomes nullable (redemption rows have
+  no campaign), with CHECK constraints keeping `EARNED` rows campaign-bound
+  and `REDEEMED` rows redemption-bound. The existing campaign foreign key is
+  unchanged.
+- No vendor (AI, cloud, API) redemption exists; each would be a new provider
+  behind the same interface once an official mechanism and agreement exist.

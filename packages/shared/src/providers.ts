@@ -182,24 +182,26 @@ export function createBillingProvider(kind: string | undefined, stripeSecretKey?
 }
 
 // ---------------------------------------------------------------------------
-// RedemptionProvider: SEAM ONLY (sponsorship Phase 1 defers redemption).
+// RedemptionProvider: turns wallet units of a reward type into something the
+// developer can use.
 //
-// Future implementations turn wallet units of a given reward type into
-// something the developer can use (credits at a tool/compute vendor, a
-// discount code, cash via an existing PayoutProvider, ...). No
-// implementation, factory or env var exists yet on purpose; the reward
-// ledger already reserves the REDEEMED entry type for when one does. A
-// redemption route should follow the /api/v1/earnings/payout pattern:
-// per-developer advisory lock, server-recomputed balance, PENDING row
-// first, provider call, then status update from the provider result.
+// The redemption route (services/ad-server/src/routes/redemptions.ts) follows
+// the /api/v1/earnings/payout pattern: per-developer advisory lock, balance
+// recomputed from the ledger, a PENDING redemption plus its REDEEMED ledger
+// debit written first, then the provider call, then the status from the
+// provider result. A FAILED result appends a compensating ADJUSTMENT credit.
+//
+// Providers never receive anything about the developer beyond their DevAds
+// developer id and the redemption itself.
 // ---------------------------------------------------------------------------
 
 export interface RedemptionRequest {
+  /** DevAds redemption id; stable across retries, so providers can dedupe on it. */
+  redemptionId: string;
   developerId: string;
   /** Opaque reward type value (mirrors RewardType); providers declare which they support. */
   rewardType: string;
   amountUnits: number;
-  destinationRef?: string;
 }
 
 export interface RedemptionResult {
@@ -212,4 +214,57 @@ export interface RedemptionProvider {
   readonly kind: string;
   supportsRewardType(rewardType: string): boolean;
   redeem(req: RedemptionRequest): Promise<RedemptionResult>;
+}
+
+/**
+ * Operator-fulfilled redemption. Accepts the request and leaves it PENDING;
+ * a DevAds operator delivers the value out of band (for example a credit
+ * code a sponsor supplied) and then completes the redemption through the
+ * admin API, or fails it, which returns the units to the developer. This is
+ * the only production provider today: it needs no third-party integration.
+ */
+export class ManualRedemptionProvider implements RedemptionProvider {
+  readonly kind = "MANUAL" as const;
+
+  supportsRewardType(_rewardType: string): boolean {
+    return true;
+  }
+
+  async redeem(_req: RedemptionRequest): Promise<RedemptionResult> {
+    return { providerRef: "", status: "PENDING" };
+  }
+}
+
+/**
+ * Development and demo only: completes every redemption immediately and
+ * delivers nothing. Never select it in a real deployment, because the
+ * developer's units are debited for a reward that does not exist.
+ */
+export class MockRedemptionProvider implements RedemptionProvider {
+  readonly kind = "MOCK" as const;
+
+  supportsRewardType(_rewardType: string): boolean {
+    return true;
+  }
+
+  async redeem(_req: RedemptionRequest): Promise<RedemptionResult> {
+    return { providerRef: nextMockRef("redeem"), status: "COMPLETED" };
+  }
+}
+
+/**
+ * Selects the redemption provider from REDEMPTION_PROVIDER. Unlike payouts
+ * and billing there is deliberately no default: unset or unrecognised means
+ * redemption is disabled (null), so a deployment never debits developer
+ * units through a provider nobody chose.
+ */
+export function createRedemptionProvider(kind: string | undefined): RedemptionProvider | null {
+  switch (kind?.trim().toLowerCase()) {
+    case "manual":
+      return new ManualRedemptionProvider();
+    case "mock":
+      return new MockRedemptionProvider();
+    default:
+      return null;
+  }
 }

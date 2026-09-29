@@ -14,7 +14,21 @@ import {
 export type WalletPageState = { status: "loading" } | WalletLoadResult;
 
 /** Presentational: renders every wallet state (loading, signed out, error, empty, populated). */
-export function RewardWalletView({ state, now, onRetry }: { state: WalletPageState; now: Date; onRetry?: () => void }) {
+export function RewardWalletView({
+  state,
+  now,
+  onRetry,
+  redemptionEnabled = false,
+  children,
+}: {
+  state: WalletPageState;
+  now: Date;
+  onRetry?: () => void;
+  /** True only when the server reported redemption enabled. */
+  redemptionEnabled?: boolean;
+  /** Rendered between the balances and the history (the redemption panel). */
+  children?: React.ReactNode;
+}) {
   if (state.status === "loading") {
     return <p className="text-muted">Loading your reward wallet...</p>;
   }
@@ -89,8 +103,10 @@ export function RewardWalletView({ state, now, onRetry }: { state: WalletPageSta
         not yet available. &quot;This month&quot; is the current calendar month in UTC.
         {view.monthSummaryMayBeIncomplete &&
           ` Monthly totals only include your ${view.history.length} most recent entries, so they may be higher.`}{" "}
-        Redeeming rewards isn&apos;t available yet.
+        {redemptionEnabled ? "You can redeem available units below." : "Redeeming rewards isn't available yet."}
       </p>
+
+      {children}
 
       <section className="card p-6">
         <h2 className="font-medium mb-4">Reward history</h2>

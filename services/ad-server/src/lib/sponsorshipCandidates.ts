@@ -120,7 +120,9 @@ export async function loadRewardCounts(
     }),
     db.developerRewardLedger.groupBy({ by: ["campaignId"], where: base, _count: { _all: true } }),
   ]);
-  for (const row of today) counts[row.campaignId].earnedToday = row._count._all;
-  for (const row of lifetime) counts[row.campaignId].earnedLifetime = row._count._all;
+  // campaignId is nullable on the ledger (redemption rows), but EARNED rows
+  // filtered by campaign always carry one.
+  for (const row of today) if (row.campaignId) counts[row.campaignId].earnedToday = row._count._all;
+  for (const row of lifetime) if (row.campaignId) counts[row.campaignId].earnedLifetime = row._count._all;
   return counts;
 }

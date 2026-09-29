@@ -113,6 +113,7 @@ model DeveloperProfile {
   sponsorshipEvents   SponsorshipEvent[]
   rewardWallets       DeveloperRewardWallet[]
   rewardLedger        DeveloperRewardLedger[]
+  rewardRedemptions   RewardRedemption[]
 
   @@map("developer_profiles")
 }
@@ -663,8 +664,10 @@ model DeveloperRewardLedger {
   developerId String
   developer   DeveloperProfile      @relation(fields: [developerId], references: [id], onDelete: Cascade)
   rewardType  RewardType
-  campaignId  String
-  campaign    SponsorshipCampaign   @relation(fields: [campaignId], references: [id])
+  // Required for EARNED rows (CHECK constraint); null for redemption debits
+  // and their compensating credits, which belong to no campaign.
+  campaignId  String?
+  campaign    SponsorshipCampaign?  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
   // Ties an EARNED entry 1:1 to the server-issued OFFER_DISPLAYED event it
   // rewards, exactly like DeveloperEarningsLedger.impressionEventId: a
   // replayed or re-keyed completion for the same display can never produce
@@ -672,13 +675,56 @@ model DeveloperRewardLedger {
   // redemptions, adjustments).
   sponsorshipEventId String?        @unique
   sponsorshipEvent   SponsorshipEvent? @relation(fields: [sponsorshipEventId], references: [eventId])
+  // Set on the REDEEMED debit and, if the redemption fails, its
+  // compensating ADJUSTMENT credit. The unique pair makes a second debit or
+  // a second refund for one redemption impossible.
+  redemptionId String?
+  redemption   RewardRedemption?     @relation(fields: [redemptionId], references: [id], onDelete: NoAction)
   entryType   RewardLedgerEntryType
   amountUnits Int
   status      RewardStatus
   description String?
   createdAt   DateTime              @default(now())
 
+  @@unique([redemptionId, entryType])
   @@index([developerId, rewardType, createdAt])
   @@index([developerId, campaignId, createdAt])
   @@map("developer_reward_ledger")
+}
+
+enum RedemptionStatus {
+  PENDING // units reserved; awaiting the provider or an operator
+  PROCESSING // provider accepted it; units still reserved
+  COMPLETED // delivered; the REDEEMED debit is final
+  FAILED // not delivered; units returned by a compensating ADJUSTMENT
+}
+
+/// A developer's request to turn wallet units into something usable. The
+/// ledger stays authoritative: creating a redemption writes a REDEEMED
+/// debit in the same transaction, and a failure appends an ADJUSTMENT
+/// credit rather than editing the debit.
+model RewardRedemption {
+  id             String           @id @default(cuid())
+  developerId    String
+  developer      DeveloperProfile @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  rewardType     RewardType
+  amountUnits    Int
+  // Which RedemptionProvider handled it (e.g. MANUAL, MOCK). Never a client value.
+  provider       String
+  status         RedemptionStatus @default(PENDING)
+  providerRef    String?
+  failureReason  String?
+  // Client-generated, unique per developer: a retried request returns the
+  // original redemption instead of debiting twice.
+  idempotencyKey String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  completedAt    DateTime?
+
+  ledgerEntries DeveloperRewardLedger[]
+
+  @@unique([developerId, idempotencyKey])
+  @@index([developerId, createdAt])
+  @@index([status, createdAt])
+  @@map("reward_redemptions")
 }

@@ -20,6 +20,7 @@ import {
   type SponsorshipNotLiveReason,
 } from "@devads/targeting";
 import { requireSession } from "../lib/authGuard.js";
+import { balancesFromLedgerGroups, rewardWalletLockKey } from "../lib/rewardBalance.js";
 import {
   loadDisplayHistory,
   loadRewardCounts,
@@ -398,7 +399,7 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
     if (developer.userId !== req.session!.sub) return reply.status(403).send({ error: "forbidden" });
 
     const { wallets, grouped, recent } = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"reward-wallet:" + developerId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${rewardWalletLockKey(developerId)}))`;
       const [wallets, grouped, recent] = await Promise.all([
         tx.developerRewardWallet.findMany({ where: { developerId } }),
         tx.developerRewardLedger.groupBy({
@@ -411,21 +412,8 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
       return { wallets, grouped, recent };
     });
 
-    // Ledger-derived balance: approved EARNED and ADJUSTMENT credit;
-    // REVERSED / REDEEMED / EXPIRED debit. PENDING EARNED counts as pending.
-    const ledgerAvailable = new Map<string, number>();
-    const ledgerPending = new Map<string, number>();
-    for (const row of grouped) {
-      const units = row._sum.amountUnits ?? 0;
-      const key = row.rewardType;
-      if ((row.entryType === "EARNED" || row.entryType === "ADJUSTMENT") && row.status === "APPROVED") {
-        ledgerAvailable.set(key, (ledgerAvailable.get(key) ?? 0) + units);
-      } else if (row.entryType === "EARNED" && row.status === "PENDING") {
-        ledgerPending.set(key, (ledgerPending.get(key) ?? 0) + units);
-      } else if (row.entryType === "REVERSED" || row.entryType === "REDEEMED" || row.entryType === "EXPIRED") {
-        ledgerAvailable.set(key, (ledgerAvailable.get(key) ?? 0) - units);
-      }
-    }
+    // Ledger-derived balance (see lib/rewardBalance.ts for the rules).
+    const { available: ledgerAvailable, pending: ledgerPending } = balancesFromLedgerGroups(grouped);
 
     const types = new Set<string>([...wallets.map((w) => w.rewardType), ...ledgerAvailable.keys(), ...ledgerPending.keys()]);
     const response: RewardWalletResponse = {
@@ -443,6 +431,7 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         id: e.id,
         rewardType: e.rewardType,
         campaignId: e.campaignId,
+        redemptionId: e.redemptionId,
         entryType: e.entryType,
         amountUnits: e.amountUnits,
         status: e.status,
