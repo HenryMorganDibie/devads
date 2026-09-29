@@ -486,3 +486,100 @@ describe("development sessions", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("sponsorship loop safety", () => {
+  it("stops serving a campaign once its total budget is spent", async () => {
+    if (!dbAvailable) return;
+    await setCampaign({ totalBudgetCents: 2 * CHARGE_CENTS });
+
+    for (let i = 0; i < 2; i++) {
+      const { offer } = await requestOffer();
+      expect(offer?.offerId).toBe(offerId);
+      expect((await report(offer.displayEventId)).status).toBe(200);
+    }
+    expect((await requestOffer()).offer).toBeNull();
+    expect(await spendTotal()).toBe(2 * CHARGE_CENTS);
+    expect(await ledgerRows()).toHaveLength(2);
+  });
+
+  it("rejects a completion that references a non-display event as its display", async () => {
+    if (!dbAvailable) return;
+    const { offer } = await requestOffer();
+    const openedEventId = randomUUID();
+    expect((await report(offer.displayEventId, "OFFER_OPENED", { eventId: openedEventId })).status).toBe(200);
+
+    // A client pointing a completion at its own OPENED event instead of the
+    // server-issued display must not qualify for a reward.
+    const res = await report(openedEventId);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("display_mismatch");
+    expect(await ledgerRows()).toHaveLength(0);
+    expect(await spendTotal()).toBe(0);
+  });
+
+  it("refuses every step of the loop without a session and writes nothing", async () => {
+    if (!dbAvailable) return;
+    const { offer } = await requestOffer();
+    const eventsBefore = await prisma.sponsorshipEvent.count({ where: { developerId: devA } });
+
+    const calls = [
+      app.inject({ method: "POST", url: "/api/v1/sessions", payload: { clientType: CLIENT } }),
+      app.inject({ method: "GET", url: `/api/v1/sponsorships/offer?clientType=${CLIENT}` }),
+      app.inject({
+        method: "POST",
+        url: "/api/v1/sponsorships/events",
+        payload: { eventId: randomUUID(), type: "OFFER_COMPLETED", displayEventId: offer.displayEventId },
+      }),
+      app.inject({ method: "GET", url: `/api/v1/wallet?developerId=${devA}` }),
+    ];
+    for (const res of await Promise.all(calls)) expect(res.statusCode).toBe(401);
+
+    expect(await prisma.sponsorshipEvent.count({ where: { developerId: devA } })).toBe(eventsBefore);
+    expect(await ledgerRows()).toHaveLength(0);
+    expect(await spendTotal()).toBe(0);
+  });
+
+  it("rejects a forged or tampered session token", async () => {
+    if (!dbAvailable) return;
+    const { offer } = await requestOffer();
+    const forged = signSession({ sub: userA, role: "DEVELOPER" }, "not-the-server-secret-but-32-chars-long!!");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/sponsorships/events",
+      headers: { authorization: `Bearer ${forged}` },
+      payload: { eventId: randomUUID(), type: "OFFER_COMPLETED", displayEventId: offer.displayEventId },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(await ledgerRows()).toHaveLength(0);
+  });
+
+  it("keeps the sponsor charge, developer reward and wallet consistent across a mixed run", async () => {
+    if (!dbAvailable) return;
+    // Two developers, retries and a skip: charges and rewards must match
+    // completions one-to-one, and every wallet must equal its ledger.
+    const completed: string[] = [];
+    for (const userId of [userA, userB, userA]) {
+      const { offer } = await requestOffer(userId);
+      const eventId = randomUUID();
+      expect((await report(offer.displayEventId, "OFFER_COMPLETED", { userId, eventId })).status).toBe(200);
+      expect((await report(offer.displayEventId, "OFFER_COMPLETED", { userId, eventId })).status).toBe(200); // retry
+      completed.push(offer.displayEventId);
+    }
+    const skipped = (await requestOffer(userB)).offer;
+    expect((await report(skipped.displayEventId, "OFFER_SKIPPED", { userId: userB })).status).toBe(200);
+
+    expect(await spendTotal()).toBe(completed.length * CHARGE_CENTS);
+    for (const [developerId, count] of [
+      [devA, 2],
+      [devB, 1],
+    ] as const) {
+      const rows = await ledgerRows(developerId);
+      expect(rows).toHaveLength(count);
+      const wallet = await prisma.developerRewardWallet.findUniqueOrThrow({
+        where: { developerId_rewardType: { developerId, rewardType: "AI_CREDITS" } },
+      });
+      expect(wallet.availableUnits).toBe(count * REWARD_UNITS);
+      expect(rows.reduce((sum, r) => sum + r.amountUnits, 0)).toBe(wallet.availableUnits);
+    }
+  });
+});

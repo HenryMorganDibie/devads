@@ -80,11 +80,12 @@ export function Developers() {
           <div className="lg:col-span-6">
             <Eyebrow index="04">For developers</Eyebrow>
             <h2 id="developers-title" className="mk-h2 mt-6">
-              Your AI coding costs money. <span className="text-value">Someone can help pay for it.</span>
+              Get sponsored value <span className="text-value">while you build.</span>
             </h2>
             <p className="mk-lede mt-7 max-w-lg">
-              Developers can opt into sponsored experiences and receive useful rewards while they build. You choose to
-              participate, you choose what to engage with, and the reward lands in your wallet.
+              Opt in to sponsored opportunities and receive useful rewards while you build: AI credits, cloud credits,
+              discounts and more. You choose what to engage with, the reward lands in your wallet, and your work stays
+              private. DevAds never needs your code, prompts or model responses.
             </p>
 
             <ul className="mt-12 grid gap-px overflow-hidden rounded-[14px] border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2">

@@ -1,5 +1,13 @@
 # Advertiser Guide
 
+> This guide covers wait-time sponsored cards: CPM campaigns shown in VS Code
+> during builds, installs and tests, the first format on DevAds. Sponsorship
+> campaigns, which charge per verified completion and give the developer a
+> reward (AI, API or compute credits, discounts, event access and more), are
+> created from the **Sponsorships** page of the same dashboard. See
+> [sponsorship-architecture.md](./sponsorship-architecture.md) for how they
+> are selected, verified, charged and rewarded.
+
 ## Audience
 
 Developers who've opted in to DevAds, reached during natural wait time in
