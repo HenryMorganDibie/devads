@@ -78,6 +78,10 @@ Then:
   2. Advertiser dashboard:  http://localhost:3001  (advertiser@devads.dev / advertiser12345)
      -- "Acme Cloud Launch (DEMO)" is already APPROVED and serving.
      -- "ShipFast CI Beta (DEMO)" is SUBMITTED, waiting in the admin approval queue.
+  0. Sponsorship loop, no UI needed (with the ad-server running):
+       npm run demo:sponsorship
+     -- walks sponsor campaign -> offer -> verified completion -> sponsor
+        charge -> developer reward -> wallet, then proves a replay is a no-op.
   3. Developer dashboard:   http://localhost:3000/login (dev@devads.dev / dev12345)
      -- shows seeded earnings/impression/payout history.
   4. VS Code extension:

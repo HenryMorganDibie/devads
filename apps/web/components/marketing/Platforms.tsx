@@ -23,11 +23,12 @@ export function Platforms() {
         <div className="max-w-3xl">
           <Eyebrow index="07">For platforms</Eyebrow>
           <h2 id="platforms-title" className="mk-h2 mt-6">
-            Bring sponsorships into the tools developers <span className="text-signal">already use.</span>
+            Add sponsored developer experiences through the <span className="text-signal">DevAds protocol.</span>
           </h2>
           <p className="mk-lede mt-7 max-w-xl">
-            DevAds is designed as an infrastructure layer that developer platforms can integrate into their own
-            experiences. The platform keeps its product; DevAds supplies the sponsorship economy underneath it.
+            DevAds is designed as an infrastructure layer that IDEs, AI coding agents, CLIs and developer tools can
+            eventually integrate. The platform keeps its product and its user experience; DevAds supplies campaigns,
+            verification, rewards and wallets underneath.
           </p>
         </div>
 

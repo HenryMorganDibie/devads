@@ -10,7 +10,7 @@ export function BusinessModel() {
   return (
     <Section id="business-model" labelledBy="business-title">
       <Container>
-        <Eyebrow index="12">Business model</Eyebrow>
+        <Eyebrow index="13">Business model</Eyebrow>
         <h2 id="business-title" className="mk-h2 mt-6">
           Everyone gets something.
         </h2>

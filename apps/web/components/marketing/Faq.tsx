@@ -7,7 +7,11 @@ const FAQ = [
   },
   {
     q: "Is DevAds just advertising?",
-    a: "Advertising is part of the system, but the larger concept is sponsorship: a company funds something of real value for the developer, and pays for a measurable outcome rather than a view.",
+    a: "No. The first use case is sponsored cards shown in VS Code during builds and tests a developer is already waiting on. The larger system is sponsorship: an organization funds something of real value for the developer and pays for a verified outcome rather than a view.",
+  },
+  {
+    q: "Are AI credits the only reward?",
+    a: "No. AI credits are one reward type among several. The reward ledger also supports API, compute and tool credits, subscription credits, discounts and cash, and each campaign chooses its own.",
   },
   {
     q: "Who can sponsor developers?",
@@ -37,7 +41,7 @@ export function Faq() {
       <Container>
         <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
           <div className="lg:sticky lg:top-28 lg:col-span-4 lg:self-start">
-            <Eyebrow index="13">FAQ</Eyebrow>
+            <Eyebrow index="14">FAQ</Eyebrow>
             <h2 id="faq-title" className="mk-h2 mt-6">
               Questions, answered plainly.
             </h2>

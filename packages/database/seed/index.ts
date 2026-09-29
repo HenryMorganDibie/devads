@@ -257,11 +257,80 @@ async function main() {
     },
   });
 
+  // --- Sponsorship campaigns (the sponsorship loop) -----------------------
+  // Two APPROVED campaigns from the same fictional sponsor with different
+  // reward types, so the demo shows the loop is not tied to AI credits.
+  // They target VS_CODE only: offer selection is global over APPROVED
+  // campaigns, and the integration tests (which share this database) use
+  // other client types, so an all-clients demo campaign would be served to
+  // the tests' developers instead of their own fixtures. Units are integer reward
+  // units; sponsorChargeCents is what the sponsor pays per verified
+  // completion. The difference between the two is not a fixed ratio: the
+  // reward and the charge are configured independently.
+  const sponsorshipCampaigns = [
+    {
+      id: "demo-sponsorship-acme-cloud",
+      name: "Acme Cloud Quickstart (DEMO)",
+      sponsorCategory: "cloud",
+      objective: "TRIAL_ACTIVATION" as const,
+      rewardType: "COMPUTE_CREDITS" as const,
+      rewardAmountUnits: 500,
+      sponsorChargeCents: 300,
+      offer: {
+        id: "demo-offer-acme-cloud-deploy",
+        title: "Deploy the Acme Cloud sample app (DEMO)",
+        description: "Fictional demo offer: deploy the sample app and receive compute credits.",
+        ctaUrl: "https://example.com/acme-cloud/quickstart",
+        requiredAction: "Deploy the sample app",
+      },
+    },
+    {
+      id: "demo-sponsorship-acme-ai",
+      name: "Acme Model API Trial (DEMO)",
+      sponsorCategory: "ai",
+      objective: "PRODUCT_DISCOVERY" as const,
+      rewardType: "AI_CREDITS" as const,
+      rewardAmountUnits: 1000,
+      sponsorChargeCents: 150,
+      offer: {
+        id: "demo-offer-acme-ai-first-call",
+        title: "Make your first Acme model API call (DEMO)",
+        description: "Fictional demo offer: make one API call and receive AI credits.",
+        ctaUrl: "https://example.com/acme-ai/first-call",
+        requiredAction: "Make one API call",
+      },
+    },
+  ];
+  for (const { offer, ...c } of sponsorshipCampaigns) {
+    const data = {
+      ...c,
+      advertiserId: advertiser.id,
+      currency: "USD",
+      totalBudgetCents: 25_000_00,
+      dailyBudgetCents: null,
+      developerDailyCap: 3,
+      developerLifetimeCap: 10,
+      frequencyCapPerDay: 20,
+      eligibleClientTypes: ["VS_CODE" as const],
+      startDate: new Date("2026-01-01T00:00:00Z"),
+      endDate: null,
+      status: "APPROVED" as const,
+      approvedAt: new Date(),
+    };
+    await prisma.sponsorshipCampaign.upsert({ where: { id: c.id }, update: {}, create: data });
+    await prisma.sponsoredOffer.upsert({
+      where: { id: offer.id },
+      update: {},
+      create: { ...offer, campaignId: c.id, status: "ACTIVE" },
+    });
+  }
+
   console.log("Seed complete:");
   console.log(`  Admin:      admin@devads.dev / admin12345 (id ${admin.id})`);
   console.log(`  Developer:  dev@devads.dev / dev12345`);
   console.log(`  Advertiser: advertiser@devads.dev / advertiser12345`);
   console.log(`  Campaigns:  ${campaign.name} (APPROVED), ${pendingCampaign.name} (SUBMITTED)`);
+  console.log(`  Sponsorships: ${sponsorshipCampaigns.map((c) => c.name).join(", ")} (APPROVED)`);
 }
 
 main()

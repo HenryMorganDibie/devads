@@ -18,7 +18,8 @@ export function Sponsors() {
           </div>
           <div className="flex flex-col justify-end gap-6 lg:col-span-4">
             <p className="mk-lede">
-              Instead of buying another anonymous impression, sponsor something developers actually care about.
+              Instead of buying another anonymous impression, fund something developers actually value. You pay for
+              verified, qualified developer engagement, measured against the outcome you chose.
             </p>
             <Link href={LINKS.sponsor} className="mk-btn mk-btn-ghost self-start">
               Sponsor developers <ArrowRight />

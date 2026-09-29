@@ -1,5 +1,13 @@
 # Architecture
 
+> DevAds is sponsorship infrastructure: organizations sponsor developers,
+> developers receive rewards, and DevAds verifies and manages the exchange.
+> This document covers the backend's overall shape and the original
+> wait-time ad flow, the first use case. The sponsorship domain that sits
+> alongside it is described in
+> [sponsorship-architecture.md](./sponsorship-architecture.md), and the client
+> boundary in [adapters.md](./adapters.md).
+
 ## Why this shape
 
 DevAds is one backend (`services/ad-server`) serving multiple clients: the VS

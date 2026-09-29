@@ -6,25 +6,38 @@
 
 [![The DevAds website hero: "Build with AI. Get sponsored." beside a diagram of sponsor funding flowing through DevAds to a developer's reward](docs/screenshots/01-hero.jpg)](https://devads-app.vercel.app)
 
-Companies sponsor developers. Developers receive value. DevAds powers the
-exchange. The first product built on it is a developer advertising network:
+DevAds lets organizations sponsor developers. Developers opt in and receive
+useful rewards while they build, and DevAds provides the infrastructure that
+verifies and manages the exchange:
 
-- **Developers** install a VS Code extension, opt in, and earn a revenue
-  share from small, tasteful sponsored cards shown only during wait time
-  they were already spending -- builds, installs, tests. If your command
-  finishes before the minimum wait threshold, you never see an ad, and you
-  can turn it off in one click.
-- **Advertisers** create a campaign, target it by language/framework/
-  runtime/platform/country, and reach developers inside the tool they're
-  already using -- not a webpage, not a pre-roll video.
-- **The platform** takes a configurable cut of advertiser spend and pays
-  the rest to the developer whose wait time earned it, tracked in a
-  transparent, auditable ledger.
+```
+sponsor campaign -> developer engagement -> verified outcome -> developer reward -> wallet
+```
 
-VS Code is the first client. The backend is client-agnostic by design --
-see [docs/architecture.md](./docs/architecture.md) for how a CLI,
-JetBrains plugin, or browser extension would plug into the same ad-server
-later.
+- **Sponsors** (any legitimate organization, not only developer-tool or AI
+  companies) fund campaigns with a budget, an objective and a reward. They are
+  charged per verified completion at the price they set, never beyond budget,
+  instead of paying for anonymous impressions.
+- **Developers** opt in, choose what to engage with, and receive rewards in a
+  wallet backed by a reward ledger. AI credits are the first concrete use
+  case; the ledger also supports API, compute and tool credits, subscription
+  credits, discounts, cash and other reward types. DevAds never needs source
+  code, prompts, model responses or secrets.
+- **Platforms** (IDEs, AI coding agents, CLIs, developer tools) integrate
+  through the DevAds protocol, `@devads/ad-sdk`. They own the experience and
+  the session; DevAds owns campaigns, eligibility, verification, charges,
+  rewards and wallets.
+- **DevAds** earns a platform fee: each campaign configures the sponsor's
+  charge and the developer's reward independently, and the fee is the
+  difference.
+
+### The first use case: wait-time sponsored cards in VS Code
+
+The first product built on this infrastructure is the VS Code extension. It
+shows a small sponsored card only while a build, install or test the
+developer is already waiting on is still running, never before and never
+longer, and can also show reward-carrying sponsored offers. It is the first
+client of the platform, not its definition.
 
 ```
 $ npm run build
@@ -41,6 +54,51 @@ $ npm run build
 
 *(Static mockup of the VS Code status-bar card -- a real recording is on
 the list; see the note in [docs/developer-guide.md](./docs/developer-guide.md).)*
+
+## Status
+
+| | What |
+| --- | --- |
+| **Implemented** | Sponsorship campaigns with sponsor and admin review; server-side offer selection, targeting, budgets, caps and verification; idempotent sponsor charges in integer cents; reward ledger and developer wallet; `@devads/ad-sdk` protocol SDK and adapter runtime; sponsor, admin and developer dashboards; the VS Code extension (the only client), including wait-time sponsored cards with CPM campaigns, developer earnings and payouts |
+| **Early** | Reward redemption, fulfilled by an operator ([docs/redemption.md](./docs/redemption.md)); Stripe billing and payouts, intended for test-mode keys and only used when configured; the hosted public API (the site is live, the API is not yet) |
+| **Planned** | Adapters for AI coding agents, CLIs and other IDEs ([docs/adapters.md](./docs/adapters.md) lists what each would legitimately require); automated fraud detection and reward reversals; automatic delivery of more reward types |
+| **Partnerships** | **None.** DevAds has no partnership with Anthropic, OpenAI, Google, Cursor or any other AI or developer-tool company, and none is needed: the whole loop runs on infrastructure DevAds controls. Client types such as `CLAUDE_CODE` or `CURSOR` are labels a sponsor may target, not integrations. |
+
+## Try the sponsorship loop
+
+With the demo stack from [Running locally](#running-locally) and the
+ad-server running, one command drives the whole loop through the same
+`@devads/ad-sdk` boundary any client uses, with no AI-provider account (it
+reports the `VS_CODE` client type, which the seeded demo campaigns target):
+
+```bash
+npm run demo:sponsorship
+```
+
+```
+01  A sponsor funds campaigns
+    Acme Cloud Quickstart (DEMO): $25,000.00 budget, pays $3.00 per verified completion, rewards 500 COMPUTE_CREDITS units
+02  A developer opts in and starts a session from a client
+03  DevAds selects an eligible sponsored opportunity
+04  The developer chooses to engage
+05  The client reports the qualifying action; DevAds verifies it server-side
+06  The sponsor is charged according to the campaign
+    Acme Cloud Quickstart (DEMO): spend $0.00 -> $3.00
+07  The developer receives the reward
+    500 COMPUTE_CREDITS units, status APPROVED
+08  The reward appears in the developer's wallet
+    COMPUTE_CREDITS: 500 available (ledger total 500)
+09  DevAds earns its platform fee
+
+Safety check: replaying the same completion
+    idempotent=true; wallet and sponsor spend unchanged: true
+```
+
+*(Abridged output from a real run. All sponsors, offers and amounts are
+fictional seed data.)* Duplicate and replayed events, campaign and budget
+exhaustion, concurrent rewards, forged displays, unauthorized access and
+cross-developer access are each covered by integration tests against a real
+Postgres; see [Tests](#tests).
 
 ## The website
 
@@ -77,13 +135,13 @@ costs.
 
 ![Traditional advertising compared with DevAds sponsorship](docs/screenshots/03-new-model.jpg)
 
-**3. The economic loop.** Six steps from a funded campaign to the platform
-fee. The loop advances on its own and each step can be selected.
+**3. The economic loop.** Nine steps from a funded campaign to the platform
+fee, each tagged with who acts: the sponsor, the developer or DevAds. The loop advances on its own and each step can be selected.
 
-![The six-step economic loop](docs/screenshots/04-economic-loop.jpg)
+![The nine-step economic loop with a key of who does what](docs/screenshots/04-economic-loop.jpg)
 
-**4. For developers.** The rewards developers can receive, with a
-conceptual wallet.
+**4. For developers.** Get sponsored value while you build: opt in, choose
+what to engage with, keep your work private. With a conceptual wallet.
 
 ![Developer rewards and the conceptual DevAds wallet](docs/screenshots/05-developers.jpg)
 
@@ -97,13 +155,14 @@ and the categories of organizations that can sponsor.
 
 ![Sponsor dashboard preview, objectives and sponsor categories](docs/screenshots/07-sponsors.jpg)
 
-**7. For platforms.** How developer tools can bring sponsorships into their
-own experiences.
+**7. For platforms.** Add sponsored developer experiences through the DevAds
+protocol.
 
 ![Potential integrations converging on the DevAds Protocol](docs/screenshots/08-platforms.jpg)
 
 **8. The protocol.** Real `@devads/ad-sdk` calls, and the stack from
-clients to sponsors. VS Code is the only client connected today.
+clients to sponsors. VS Code is the only client connected today; the others
+are potential client types, not integrations or partnerships.
 
 ![Protocol section with SDK code and the client-to-sponsor stack](docs/screenshots/09-protocol.jpg)
 
@@ -127,20 +186,25 @@ sees.
 
 ![Infrastructure layers from sponsors to accounting](docs/screenshots/13-infrastructure.jpg)
 
-**13. Business model.** Developers get rewards, sponsors get qualified
+**13. Status.** What is implemented, what is early and what is planned.
+Partnerships: none.
+
+![Where DevAds is today: implemented, early and planned](docs/screenshots/14-status.jpg)
+
+**14. Business model.** Developers get rewards, sponsors get qualified
 engagement, DevAds gets platform fees.
 
-![Everyone gets something: the business model](docs/screenshots/14-business-model.jpg)
+![Everyone gets something: the business model](docs/screenshots/15-business-model.jpg)
 
-**14. FAQ.**
+**15. FAQ.**
 
-![Frequently asked questions](docs/screenshots/15-faq.jpg)
+![Frequently asked questions](docs/screenshots/16-faq.jpg)
 
-**15. Get started.** One path each for developers, sponsors and platforms.
+**16. Get started.** One path each for developers, sponsors and platforms.
 
-![Final call to action with three paths](docs/screenshots/16-cta.jpg)
+![Final call to action with three paths](docs/screenshots/17-cta.jpg)
 
-![Site footer](docs/screenshots/17-footer.jpg)
+![Site footer](docs/screenshots/18-footer.jpg)
 
 ### On mobile
 
@@ -154,6 +218,28 @@ The layout is designed for phones rather than shrunk from desktop
 </p>
 
 ## How it works
+
+### The sponsorship loop
+
+1. A sponsor funds a campaign: budget, objective, reward and price per
+   verified completion. An admin reviews it before it serves.
+2. A developer opts into sponsorship in a client (today, the VS Code
+   extension).
+3. DevAds selects an eligible sponsored opportunity server-side and records
+   a server-issued display.
+4. The developer chooses to engage, or skips at no cost.
+5. The client reports the qualifying action; DevAds verifies it against the
+   server-issued display, the campaign's liveness and the developer's caps,
+   inside a row-locked transaction.
+6. The sponsor is charged the campaign's price, never beyond its budget.
+7. The developer receives the campaign-configured reward.
+8. The reward appears in the developer's wallet, backed by a reward ledger
+   that is separate from the ad earnings ledger.
+9. DevAds earns its platform fee.
+
+Full design: [docs/sponsorship-architecture.md](./docs/sponsorship-architecture.md).
+
+### Wait-time sponsored cards (the first use case)
 
 ```
 command starts (npm install, cargo build, docker build, ...)
@@ -172,7 +258,17 @@ and design rationale.
 
 ## Privacy
 
-Strict allowlist telemetry only: detected language/runtime/platform and the
+No source code. No prompts. No model responses. No secrets. DevAds never
+reads files, inspects other processes, intercepts prompts, captures model
+output, extracts credentials or relies on undocumented provider APIs. The
+VS Code client learns that a terminal command started and ended through
+VS Code's public shell-integration events, and keeps only the command's
+first word (for example `npm`). Sponsorship requests
+carry only coarse, allowlisted metadata about the interaction (client type,
+version, server-issued ids, interaction type), and the SDK's public types
+have no field for anything else.
+
+For wait-time cards, strict allowlist telemetry only: detected language/runtime/platform and the
 *name* of the command (e.g. `npm`, never full arguments). Never source
 code, file contents, environment variables, or secrets. Full detail:
 [docs/privacy.md](./docs/privacy.md).
@@ -275,18 +371,36 @@ npm test          # unit + integration tests across every workspace (turbo)
 ```
 
 Integration tests run against a real Postgres (the `docker compose up
-postgres` instance) and cover the full campaign → approval → ad selection →
-qualified view → earnings ledger → payout lifecycle, plus idempotency,
-frequency capping, concurrent-request safety (payouts, budget enforcement,
-carry accounting -- each proven with real simultaneous HTTP requests, not
-just serial calls), and the auth/ownership guards. Unit tests cover the
-pure targeting engine, money math, object-storage upload validation, and
-the extension's eligibility logic (no VS Code host required). 89 tests
-total, all green from a fresh clone.
+postgres` instance). They cover:
+
+- **Sponsorships:** campaign -> offer -> verified completion -> sponsor
+  charge -> reward -> wallet, including a third-party-style adapter driving
+  the loop through `@devads/ad-sdk`; duplicate and replayed events; forged
+  displays; paused, expired and exhausted campaigns; daily and total
+  budgets; developer caps; concurrent completions; unauthenticated,
+  forged-token and cross-developer access; and redemption with its
+  reconciliation.
+- **Ads:** campaign -> approval -> ad selection -> qualified view ->
+  earnings ledger -> payout, with idempotency, frequency capping and
+  concurrent-request safety for budgets, carry accounting and payouts.
+
+Unit tests cover the pure targeting engine, money math, the SDK and adapter
+runtime, upload validation and the extension's eligibility logic (no VS Code
+host required).
+
+The integration tests read `DATABASE_URL` from the environment. Without a
+reachable database they **skip rather than fail**, so run them with the
+variable set (for example `set -a && . ./.env && set +a && npm test`) and
+check the run takes seconds, not milliseconds.
 
 ## Revenue model
 
-CPM-based. Advertiser spend splits between platform and developer by a
+**Sponsorships:** each campaign sets the sponsor's charge per verified
+completion (integer cents) and the developer's reward (integer reward
+units) independently. DevAds keeps the difference as its platform fee. No
+fixed conversion between reward units and cents is assumed.
+
+**Wait-time cards:** CPM-based. Advertiser spend splits between platform and developer by a
 configurable basis-points share (`DEFAULT_DEVELOPER_REVENUE_SHARE_BPS`,
 default 60% to developers). All money is stored as integer minor units plus
 a currency code -- never floating point, and never lost to per-impression
@@ -316,23 +430,26 @@ rounding (see [docs/architecture.md](./docs/architecture.md#money)).
 
 ## Roadmap
 
-Phase 1 (this MVP): VS Code extension, ad server, three dashboards, real
-creative upload to object storage, demo mode. Phase 2+: CLI, JetBrains,
-browser extension, real Stripe deployment, video creative rendering,
-automated fraud anomaly detection. Full detail and rationale for what's
-*not* built yet: [docs/architecture.md](./docs/architecture.md#roadmap).
+The sponsorship domain (development sessions, sponsored offers, sponsor
+charges, reward ledger and wallet) is provider-agnostic and sits alongside
+the original ad system without changing it; reward accounting never touches
+the ad earnings ledger or payouts. See
+[docs/sponsorship-architecture.md](./docs/sponsorship-architecture.md).
 
-Sponsorships (additive, server-side foundation): a provider-agnostic
-developer sponsorship domain (development sessions, sponsored offers,
-reward ledger and wallet) that sits alongside the ad system without
-changing it. See [docs/sponsorship-architecture.md](./docs/sponsorship-architecture.md).
-The VS Code extension is the only client wired to it so far (through
-`@devads/ad-sdk`): it can show a reward-carrying sponsored offer during a
-wait and list the developer's reward wallet. No other editor or agent
-integration exists yet; the adapter boundary for building one, and what
-each would legitimately require, is in [docs/adapters.md](./docs/adapters.md).
-Developers can redeem reward units when an operator enables a redemption
-provider (today: operator-fulfilled `manual`); see [docs/redemption.md](./docs/redemption.md).
+Next, in rough order:
+
+- **Client adapters** beyond VS Code: AI coding agents, CLIs and other
+  IDEs, built on the adapter runtime in `@devads/ad-sdk`. None exists yet;
+  [docs/adapters.md](./docs/adapters.md) sets out what each would
+  legitimately require. None needs a vendor partnership.
+- **Abuse controls:** automated fraud detection, completion proof and
+  reward reversals (today: server-issued displays, idempotency, row locks,
+  per-developer caps and ownership checks).
+- **Rewards:** automatic delivery for more reward types (today: redemption
+  is operator-fulfilled; see [docs/redemption.md](./docs/redemption.md)).
+- **Payments:** live Stripe billing and payouts, and a hosted public API.
+- **Wait-time cards:** CLI, JetBrains and browser clients, and video
+  creatives. Detail: [docs/architecture.md](./docs/architecture.md#roadmap).
 
 ## License
 

@@ -14,6 +14,7 @@ import { Principles } from "../components/marketing/Principles";
 import { Crescendo } from "../components/marketing/Crescendo";
 import { Example } from "../components/marketing/Example";
 import { Infrastructure } from "../components/marketing/Infrastructure";
+import { Status } from "../components/marketing/Status";
 import { BusinessModel } from "../components/marketing/BusinessModel";
 import { Faq } from "../components/marketing/Faq";
 import { FinalCta } from "../components/marketing/FinalCta";
@@ -50,6 +51,7 @@ export default function LandingPage() {
         <Crescendo />
         <Example />
         <Infrastructure />
+        <Status />
         <BusinessModel />
         <Faq />
         <FinalCta />

@@ -19,7 +19,8 @@
     "db:migrate": "npm run migrate -w @devads/database",
     "db:seed": "npm run seed -w @devads/database",
     "demo": "node scripts/demo.js",
-    "demo:wait": "node scripts/demo-wait.js"
+    "demo:wait": "node scripts/demo-wait.js",
+    "demo:sponsorship": "node scripts/demo-sponsorship.mjs"
   },
   "devDependencies": {
     "turbo": "^2.1.3",

@@ -1,10 +1,16 @@
 import { Container, Eyebrow, Reveal, Section } from "./primitives";
 
+// Mirrors CLIENT_INTEGRATIONS in packages/ad-sdk/src/adapter/integrations.ts:
+// VS Code is the only implemented client. The rest are client types the
+// protocol can represent, not integrations or partnerships.
 const CLIENTS: Array<{ name: string; state: "available" | "potential" }> = [
   { name: "VS Code", state: "available" },
   { name: "Claude Code", state: "potential" },
   { name: "Codex", state: "potential" },
   { name: "Cursor", state: "potential" },
+  { name: "Gemini", state: "potential" },
+  { name: "OpenCode", state: "potential" },
+  { name: "Aider", state: "potential" },
   { name: "Custom agent", state: "potential" },
 ];
 
@@ -87,13 +93,13 @@ export function Protocol() {
 
             <Reveal delay={120} className="min-w-0 lg:col-span-6">
               <figure className="mk-panel mk-dots p-5 sm:p-8" aria-label="Conceptual diagram of the DevAds protocol stack">
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {CLIENTS.map((c) => (
                     <li
                       key={c.name}
                       className={`rounded-lg border px-2 py-2.5 text-center ${
                         c.state === "available" ? "border-value/35 bg-value/[0.06]" : "border-dashed border-white/[0.12] bg-[#0c0d10]"
-                      } ${c.name === "Custom agent" ? "col-span-2 sm:col-span-1" : ""}`}
+                      }`}
                     >
                       <p className="text-[13px] tracking-[-0.01em]">{c.name}</p>
                       <p className={`mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] ${c.state === "available" ? "text-value" : "text-[color:var(--mk-dim)]"}`}>
@@ -104,7 +110,7 @@ export function Protocol() {
                 </ul>
 
                 <svg viewBox="0 0 500 40" preserveAspectRatio="none" className="hidden h-10 w-full sm:block" aria-hidden>
-                  {[50, 150, 250, 350, 450].map((x) => (
+                  {[62.5, 187.5, 312.5, 437.5].map((x) => (
                     <path key={x} d={`M${x} 0 C ${x} 24, 250 16, 250 40`} fill="none" stroke="rgba(255,255,255,0.18)" vectorEffect="non-scaling-stroke" />
                   ))}
                 </svg>

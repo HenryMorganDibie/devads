@@ -15,7 +15,7 @@ function env(value: string | undefined): string | undefined {
 export const SITE = {
   title: "DevAds | The Sponsorship Infrastructure for AI-Powered Development",
   description:
-    "DevAds connects companies that want to reach developers with developers who want more value from the tools they use to build.",
+    "DevAds connects organizations that want to reach developers with developers who want more value from the tools they use to build.",
   /** Canonical production origin. Only set once a real domain exists. */
   url: env(process.env.NEXT_PUBLIC_SITE_URL),
 } as const;

@@ -2,10 +2,14 @@ import { ArrowRight, Container } from "./primitives";
 import { HeroSystem } from "./HeroSystem";
 import { HeroOpportunityCard } from "./HeroOpportunityCard";
 
-const LEGEND = [
-  { color: "bg-fund", label: "Sponsor funding" },
-  { color: "bg-value", label: "Developer value" },
-  { color: "bg-signal", label: "Verified engagement" },
+// The product in one line, colored by meaning: amber is the sponsor's
+// money, blue is engagement DevAds verifies, mint is value to the developer.
+const CHAIN = [
+  { color: "bg-fund", label: "Sponsor" },
+  { color: "bg-signal", label: "Engagement" },
+  { color: "bg-signal", label: "Verified outcome" },
+  { color: "bg-value", label: "Reward" },
+  { color: "bg-value", label: "Wallet" },
 ];
 
 export function Hero() {
@@ -41,11 +45,12 @@ export function Hero() {
 
             <div className="mt-8 max-w-[34rem] space-y-4">
               <p className="text-[clamp(1.0625rem,1rem+0.35vw,1.25rem)] leading-[1.55] tracking-[-0.01em] text-[color:var(--mk-text)]/90">
-                DevAds connects companies that want to reach developers with developers who want more value from the
-                tools they use to build.
+                DevAds connects organizations that want to reach developers with developers who want more value from
+                the tools they use to build.
               </p>
               <p className="mk-lede">
-                Companies fund sponsorships. Developers receive rewards. DevAds handles everything in between.
+                Organizations fund sponsorships. Developers receive useful rewards. DevAds verifies and manages the
+                exchange.
               </p>
             </div>
 
@@ -54,18 +59,21 @@ export function Hero() {
                 For developers <ArrowRight />
               </a>
               <a href="#sponsors" className="mk-btn mk-btn-ghost">
-                For companies <ArrowRight />
+                For sponsors <ArrowRight />
               </a>
             </div>
 
-            <ul className="mt-14 flex flex-wrap gap-x-6 gap-y-2 border-t border-white/[0.06] pt-6" aria-label="Diagram legend">
-              {LEGEND.map((l) => (
-                <li key={l.label} className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-[color:var(--mk-muted)]">
-                  <span className={`h-[3px] w-4 rounded-full ${l.color}`} />
-                  {l.label}
+            <ol className="mt-14 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-t border-white/[0.06] pt-6" aria-label="How DevAds works">
+              {CHAIN.map((l, i) => (
+                <li key={l.label} className="flex items-center gap-2.5 font-mono text-[10.5px] uppercase tracking-[0.12em] text-[color:var(--mk-muted)]">
+                  <span className="flex items-center gap-2">
+                    <span className={`h-[3px] w-4 rounded-full ${l.color}`} />
+                    {l.label}
+                  </span>
+                  {i < CHAIN.length - 1 && <span aria-hidden className="text-white/20">&rarr;</span>}
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
 
           <div className="relative lg:col-span-5">
