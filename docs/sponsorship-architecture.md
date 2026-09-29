@@ -159,3 +159,64 @@ each gained relation-only fields. These have no columns, and the migration
 does not alter either table. Both sponsorship migrations only create new
 enums, tables, indexes, foreign keys and CHECK constraints:
 `20260928232350_sponsorship_domain` and `20260928232400_sponsorship_check_constraints`.
+
+## Protocol SDK (Phase 2)
+
+`packages/ad-sdk` (`@devads/ad-sdk`) is the stable client boundary for the
+sponsorship API. The directory had been reserved for a shared client SDK and
+was empty, so Phase 2 fills it instead of adding a second package. Clients
+integrate against `DevAdsClient` and never hand-roll HTTP calls, know
+endpoint paths, or see database types.
+
+| SDK method | Wraps | Notes |
+| --- | --- | --- |
+| `startSession(context)` | `POST /api/v1/sessions` | `clientType`, `clientVersion`, `activityCategory` only |
+| `endSession(sessionId)` | `POST /api/v1/sessions/:id/end` | idempotent server-side |
+| `requestSponsoredOpportunity(context)` | `GET /api/v1/sponsorships/offer` | resolves `null` when no offer; a non-null offer is already recorded as `OFFER_DISPLAYED` |
+| `reportOfferEvent(event)` | `POST /api/v1/sponsorships/events` | `OFFER_SKIPPED` / `OFFER_OPENED` / `OFFER_INTERACTED` only |
+| `completeQualifyingAction(event)` | `POST /api/v1/sponsorships/events` | `OFFER_COMPLETED`, correlated by the offer's `displayEventId` |
+| `getWallet(developerId?)` | `GET /api/v1/wallet` | developer id from the argument or `credentials.developerId` |
+
+Contract rules:
+
+- **One source of truth for shapes.** Every request and response type is an
+  alias of a DTO in `packages/shared/src/sponsorship.ts`. The client type is
+  the shared `DevClientType` enum (re-exported as `DEV_CLIENT_TYPES`), so no
+  Prisma type reaches a client package.
+- **Validated both ways.** Inputs are parsed with the shared request schemas
+  before anything is sent. Only schema fields are sent, and unknown keys are
+  dropped. Every 2xx body is parsed with the shared response schema, and a
+  body that doesn't match (for example a fractional reward amount or an
+  unknown reward type) rejects with `invalid_response` and is never returned.
+- **Coarse metadata only.** The public input types have no field for source
+  code, prompts, model output, file paths, repository contents or secrets.
+  The free-form `metadata` field that the event schema allows is not exposed
+  by the SDK in this phase.
+- **Server-authoritative.** The SDK makes no economic decision. It cannot
+  report `OFFER_DISPLAYED` or `OFFER_REQUESTED`, and it never sends a reward
+  amount or type. Event ids are idempotency keys: the SDK generates one
+  (`crypto.randomUUID()`) unless the caller passes one, and returns it so a
+  retry can reuse it.
+- **Existing auth only.** The constructor takes `credentials.token`, which is
+  the session bearer token from the existing device-auth / login flow, as a
+  string or an async provider that is re-read on every call. There is no new
+  API-key or machine-auth mechanism, so the non-interactive-agent auth gap
+  noted above still applies.
+- **Typed failures.** Every method resolves with validated data or rejects
+  with a `DevAdsError` whose `code` is one of `invalid_request`,
+  `unauthenticated`, `network`, `timeout`, `rejected` (non-2xx, with `status`
+  and the server's `reason`, such as `developer_daily_cap_reached`) or
+  `invalid_response`. Adapters choose how to degrade. The existing extension
+  policy is that ad delivery must never disrupt the developer's work.
+- **Transport.** The client uses a structural `fetch` (default
+  `globalThis.fetch`, injectable) with a per-request timeout that actually
+  aborts the request. Endpoint paths live only in the SDK's internal route
+  table, which is not exported. Nothing in the public interface names VS
+  Code or any other specific tool.
+
+**Status of clients.** Nothing consumes the SDK yet. Phase 3 will move the
+VS Code extension onto it. Later, a Phase 6 adapter for another tool (Claude
+Code, Codex, Gemini, Cursor, OpenCode, Aider, or a custom or local agent)
+would build against this same client. None of those adapters exist, not even
+as stubs, and no AI-provider integration exists. The only trace of those
+tools is the shared `DevClientType` enum value each would send.

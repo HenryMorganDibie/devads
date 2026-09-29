@@ -1,0 +1,22 @@
+{
+  "name": "@devads/ad-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DevAds Protocol SDK: the stable, provider-agnostic client boundary for the sponsorship API.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devads/shared": "*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}
