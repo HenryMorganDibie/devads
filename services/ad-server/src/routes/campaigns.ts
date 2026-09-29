@@ -6,8 +6,8 @@ import { hashPassword, signSession } from "@devads/auth";
 import { config } from "../lib/config.js";
 import { requireAdmin, requireSession } from "../lib/authGuard.js";
 import { getCreativeUrl, uploadCreativeFile, validateCreativeUpload } from "../lib/storage.js";
+import { SESSION_SECRET } from "../lib/secrets.js";
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 
 /** True if the signed-in user (req.session.sub) is a member of advertiserId. */
 async function isAdvertiserMember(userId: string, advertiserId: string): Promise<boolean> {

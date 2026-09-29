@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { verifySession, type SessionPayload } from "@devads/auth";
+import { SESSION_SECRET } from "./secrets.js";
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 
 declare module "fastify" {
   interface FastifyRequest {

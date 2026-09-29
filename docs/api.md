@@ -104,6 +104,13 @@ the caller happening to supply the right id in the request:
   `/api/v1/auth/admin-login` only.
 - `/api/v1/admin/*`: requires an ADMIN-role session.
 
+Session tokens are signed with `SESSION_SECRET`
+(`services/ad-server/src/lib/secrets.ts`). Development and tests fall back
+to a published default; in production (`NODE_ENV=production` or on Vercel)
+the server refuses to start if the secret is missing, shorter than 32
+characters, or equal to that default, so tokens can never be forged with a
+known key.
+
 Covered by `authGuard.integration.test.ts` (401 with no token, 403 for a
 signed-in non-owner/non-member, 403 for a non-admin hitting admin routes,
 404 when a session resolves to no matching profile, 200 for the actual

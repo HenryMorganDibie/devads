@@ -11,8 +11,8 @@ import {
 } from "@devads/auth";
 import { config } from "../lib/config.js";
 import { requireSession } from "../lib/authGuard.js";
+import { SESSION_SECRET } from "../lib/secrets.js";
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 const DEVICE_CODE_TTL_SECONDS = Number(process.env.DEVICE_AUTH_CODE_TTL_SECONDS ?? 600);
 
 const DeviceAuthStartBody = z.object({
