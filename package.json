@@ -2,6 +2,7 @@
   "name": "devads",
   "private": true,
   "version": "0.1.0",
+  "homepage": "https://devads-app.vercel.app",
   "workspaces": [
     "apps/*",
     "packages/*",

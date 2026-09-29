@@ -3,6 +3,7 @@
   "displayName": "DevAds",
   "description": "Turn developer wait time into value. Sponsored cards during builds, installs, and tests you were already waiting on -- never before, never longer.",
   "version": "0.1.0",
+  "homepage": "https://devads-app.vercel.app",
   "publisher": "devads",
   "license": "MIT",
   "repository": {
