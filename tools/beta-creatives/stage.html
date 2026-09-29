@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: "Inter"; src: url("node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "JBM"; src: url("node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+  @font-face { font-family: "JBM"; src: url("node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2") format("woff2"); font-weight: 500; }
+  @font-face { font-family: "Serif"; src: url("node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+  @font-face { font-family: "Serif"; src: url("node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; }
+  body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden; background: var(--bg); color: var(--fg); }
+  .glow { position: absolute; inset: -20%; pointer-events: none; }
+  .grid { position: absolute; inset: 0; pointer-events: none; opacity: var(--grid-o);
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px; mask-image: radial-gradient(ellipse at 50% 40%, #000 30%, transparent 75%); }
+  .chrome { position: absolute; left: 56px; right: 56px; top: 40px; display: flex; align-items: center; justify-content: space-between; z-index: 5; }
+  .badge { font-family: "JBM"; font-weight: 500; font-size: 17px; letter-spacing: .14em; text-transform: uppercase; padding: 9px 14px; border-radius: 8px;
+    border: 1.5px solid var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .brand { font-family: "JBM"; font-size: 17px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .progress { position: absolute; left: 0; bottom: 0; height: 5px; background: var(--accent); z-index: 5; }
+  .foot { position: absolute; left: 56px; right: 56px; bottom: 26px; display: flex; justify-content: space-between; font-family: "JBM"; font-size: 15px; color: var(--muted); z-index: 5; letter-spacing: .04em; }
+  .scene { position: absolute; left: 56px; right: 56px; top: 112px; bottom: 72px; display: flex; flex-direction: column; justify-content: center; }
+  .eyebrow { font-family: "JBM"; font-size: 20px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 26px; }
+  .big { font-weight: 700; letter-spacing: -0.035em; line-height: 1.02; font-size: 92px; }
+  .display-mono .big { font-family: "JBM"; font-weight: 500; letter-spacing: -0.02em; font-size: 84px; white-space: nowrap; }
+  .display-serif .big, .display-serif .h2, .display-serif .ctaname { font-family: "Serif"; font-weight: 700; letter-spacing: -0.02em; }
+  .display-serif .big { font-size: 76px; line-height: 1.08; }
+  .sub { margin-top: 30px; font-size: 32px; line-height: 1.35; color: var(--muted); max-width: 1050px; }
+  .h2 { font-size: 50px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; margin-bottom: 38px; max-width: 1120px; }
+  .items { display: flex; flex-direction: column; gap: 20px; }
+  .item { display: flex; align-items: center; gap: 22px; font-size: 36px; line-height: 1.25; }
+  .tick { width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; background: color-mix(in srgb, var(--accent2) 18%, transparent); border: 2px solid var(--accent2); position: relative; }
+  .tick::after { content: ""; position: absolute; left: 10px; top: 4px; width: 8px; height: 16px; border: solid var(--accent2); border-width: 0 3px 3px 0; transform: rotate(45deg); }
+  .note { margin-top: 34px; font-size: 26px; color: var(--muted); }
+  .term { background: var(--panel); border: 1.5px solid var(--line2); border-radius: 18px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .termbar { display: flex; align-items: center; gap: 10px; padding: 16px 22px; border-bottom: 1.5px solid var(--line2); font-family: "JBM"; font-size: 17px; color: var(--muted); }
+  .dot { width: 13px; height: 13px; border-radius: 50%; }
+  .termbody { padding: 30px 34px 34px; font-family: "JBM"; font-size: 27px; line-height: 1.6; white-space: pre; min-height: 330px; }
+  .caret { display: inline-block; width: 14px; height: 30px; background: var(--accent); vertical-align: -5px; margin-left: 2px; }
+  .pipe { display: flex; align-items: stretch; gap: 0; }
+  .node { flex: 1 1 0; padding: 26px 18px; border-radius: 16px; border: 1.5px solid var(--line2); background: var(--panel); font-size: 27px; font-weight: 600; line-height: 1.2; text-align: center; display: flex; align-items: center; justify-content: center; min-height: 150px; }
+  .arrow { flex: 0 0 46px; display: flex; align-items: center; justify-content: center; font-size: 34px; color: var(--muted); }
+  .ctaname { font-size: 96px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+  .display-mono .ctaname { font-family: "JBM"; font-weight: 500; letter-spacing: -0.02em; font-size: 88px; }
+  .tagline { margin-top: 22px; font-size: 38px; color: var(--fg); opacity: .9; max-width: 1100px; line-height: 1.25; }
+  .cmd { margin-top: 30px; display: inline-block; font-family: "JBM"; font-size: 26px; white-space: pre; padding: 14px 20px; border-radius: 12px; background: var(--panel); border: 1.5px solid var(--line2); color: var(--fg); }
+  .urlrow { margin-top: 34px; display: flex; align-items: center; gap: 18px; }
+  .btn { font-size: 28px; font-weight: 700; padding: 18px 30px; border-radius: 14px; background: var(--accent); color: var(--btnfg); }
+  .url { font-family: "JBM"; font-size: 26px; color: var(--muted); }
+  .c-fg { color: var(--fg); } .c-muted { color: var(--muted); } .c-accent { color: var(--accent); } .c-accent2 { color: var(--accent2); } .c-danger { color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+  // Deterministic renderer: renderFrame(product, variant, t) draws the frame
+  // at time t (seconds) from scratch. No CSS animations or timers, so every
+  // captured frame is exactly reproducible.
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  function reveal(lt, delay, dur = 0.45, dist = 22) {
+    const p = ease((lt - delay) / dur);
+    return `opacity:${p.toFixed(3)};transform:translateY(${((1 - p) * dist).toFixed(2)}px)`;
+  }
+
+  function sceneAt(product, variant, t) {
+    let start = 0;
+    const list = product.scenes.filter((s) => s.d[variant]);
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i].d[variant];
+      if (t < start + d || i === list.length - 1) return { scene: list[i], lt: t - start, d, index: i, count: list.length };
+      start += d;
+    }
+  }
+
+  function hook(s, lt) {
+    const big = s.big.map((p) => `<span class="c-${p.c}">${esc(p.t)}</span>${p.br ? "<br/>" : ""}`).join("");
+    return `<div class="eyebrow" style="${reveal(lt, 0)}">${esc(s.eyebrow)}</div>
+      <div class="big" style="${reveal(lt, 0.12, 0.55, 30)}">${big}</div>
+      <div class="sub" style="${reveal(lt, 0.55)}">${esc(s.sub)}</div>`;
+  }
+
+  function terminal(s, lt, d) {
+    // Type the command over ~45% of the scene, then print output lines.
+    const typeEnd = Math.min(d * 0.42, 2.2);
+    const typed = Math.floor(clamp((lt - 0.25) / typeEnd) * s.command.length);
+    const outStart = 0.25 + typeEnd + 0.2;
+    const step = Math.max(0.12, (d - outStart - 0.9) / Math.max(1, s.output.length));
+    const shown = s.output.filter((_, i) => lt >= outStart + i * step);
+    const caretOn = typed < s.command.length || Math.floor(lt * 2.5) % 2 === 0;
+    const lines = shown.map((l) => `<span class="c-${l.c}">${esc(l.t) || " "}</span>`).join("\n");
+    return `<div class="term" style="${reveal(lt, 0, 0.4, 16)}">
+      <div class="termbar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span style="margin-left:10px">${esc(s.title)}</span></div>
+      <div class="termbody"><span class="c-muted">$ </span><span class="c-fg">${esc(s.command.slice(0, typed))}</span>${typed < s.command.length || shown.length === 0 ? `<span class="caret" style="opacity:${caretOn ? 1 : 0}"></span>` : ""}${shown.length ? "\n\n" + lines : ""}</div>
+    </div>`;
+  }
+
+  function bullets(s, lt, d) {
+    const step = Math.min(0.45, (d - 1.4) / Math.max(1, s.items.length));
+    const items = s.items.map((it, i) => `<div class="item" style="${reveal(lt, 0.35 + i * step)}"><span class="tick"></span><span>${esc(it)}</span></div>`).join("");
+    const note = s.note ? `<div class="note" style="${reveal(lt, 0.35 + s.items.length * step + 0.1)}">${esc(s.note)}</div>` : "";
+    return `<div class="h2" style="${reveal(lt, 0)}">${esc(s.heading)}</div><div class="items">${items}</div>${note}`;
+  }
+
+  function pipeline(s, lt, d) {
+    const step = Math.min(0.5, (d - 1.2) / s.nodes.length);
+    const parts = s.nodes.map((n, i) => {
+      const on = lt >= 0.3 + i * step;
+      const active = on && (i === s.nodes.length - 1 || lt < 0.3 + (i + 1) * step + 0.35);
+      const border = on ? "var(--accent)" : "var(--line2)";
+      const bg = active ? "color-mix(in srgb, var(--accent) 16%, var(--panel))" : "var(--panel)";
+      const node = `<div class="node" style="${reveal(lt, 0.3 + i * step, 0.35, 14)};border-color:${border};background:${bg}">${esc(n)}</div>`;
+      const arrow = i < s.nodes.length - 1 ? `<div class="arrow" style="opacity:${on ? 1 : 0.15};color:${on ? "var(--accent)" : "var(--muted)"}">→</div>` : "";
+      return node + arrow;
+    }).join("");
+    return `<div class="h2" style="${reveal(lt, 0)}">${esc(s.heading)}</div><div class="pipe">${parts}</div>`;
+  }
+
+  function cta(s, lt, product) {
+    const cmd = s.command ? `<div><span class="cmd" style="${reveal(lt, 0.5)}"><span class="c-muted">$ </span>${esc(s.command)}</span></div>` : "";
+    const label = product.slug === "devads" ? "Join the beta" : "Open the project page";
+    return `<div class="ctaname" style="${reveal(lt, 0, 0.5, 26)}">${esc(s.name)}</div>
+      <div class="tagline" style="${reveal(lt, 0.25)}">${esc(s.tagline)}</div>
+      ${cmd}
+      <div class="urlrow" style="${reveal(lt, 0.7)}"><span class="btn">${label} →</span><span class="url">${esc(product.url)}</span></div>`;
+  }
+
+  window.renderFrame = (product, variant, t) => {
+    const th = product.theme;
+    const stage = document.getElementById("stage");
+    const vars = {
+      "--bg": th.bg, "--panel": th.panel, "--fg": th.fg, "--muted": th.muted, "--accent": th.accent, "--accent2": th.accent2, "--danger": th.danger,
+      "--line": th.light ? "rgba(60,40,20,.07)" : "rgba(255,255,255,.045)", "--line2": th.light ? "rgba(60,40,20,.16)" : "rgba(255,255,255,.11)",
+      "--grid-o": th.light ? 0.7 : 1, "--btnfg": th.light ? "#fffaf3" : th.bg,
+    };
+    stage.setAttribute("style", Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";"));
+    stage.className = `display-${th.display}`;
+    const { scene, lt, d } = sceneAt(product, variant, t);
+    // Scene cross-fade: out over the last 0.3s (except the final CTA, which holds).
+    const isLast = scene.type === "cta";
+    const out = isLast ? 1 : clamp((d - lt) / 0.3);
+    let body = "";
+    if (scene.type === "hook") body = hook(scene, lt);
+    else if (scene.type === "terminal") body = terminal(scene, lt, d);
+    else if (scene.type === "bullets") body = bullets(scene, lt, d);
+    else if (scene.type === "pipeline") body = pipeline(scene, lt, d);
+    else if (scene.type === "cta") body = cta(scene, lt, product);
+    const drift = (t / variant) * 60;
+    stage.innerHTML = `
+      <div class="glow" style="background:radial-gradient(900px 520px at ${30 + drift * 0.3}% ${18 + drift * 0.1}%, color-mix(in srgb, ${th.accent} ${th.light ? 10 : 16}%, transparent), transparent 70%)"></div>
+      <div class="grid"></div>
+      <div class="chrome"><span class="badge">DevAds Beta · First-party</span><span class="brand">${esc(product.name)}</span></div>
+      <div class="scene" style="opacity:${out.toFixed(3)}">${body}</div>
+      <div class="foot"><span>Created and funded by DevAds. Not an external sponsor.</span><span>${Math.ceil(variant - t)}s</span></div>
+      <div class="progress" style="width:${((t / variant) * 100).toFixed(3)}%"></div>`;
+  };
+</script>
+</body>
+</html>

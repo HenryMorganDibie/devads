@@ -77,6 +77,11 @@
           "default": true,
           "description": "Send coarse, allowlisted context (language, framework, runtime, platform, country) with ad requests. Never sends source code, file contents, environment variables, secrets, or full command arguments."
         },
+        "devads.sponsorship.video.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow video sponsored offers. A video is only shown when it fits the time a terminal command is expected to keep running, estimated from how long the same command took before on this machine (command history is kept locally as hashes). Only that number of seconds is sent, never the command. Videos open beside the editor without taking focus, start muted, and close when the command finishes. Turn off to receive text offers only."
+        },
         "devads.sponsorship.enabled": {
           "type": "boolean",
           "default": true,

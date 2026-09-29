@@ -9,6 +9,8 @@ import { getDeveloperId, getSessionToken, signIn, signOut } from "./auth";
 import { createSponsorshipClient } from "./sponsorshipClient";
 import { SponsorshipSession } from "./sponsorshipSession";
 import { SponsoredOfferController } from "./sponsoredOffer";
+import { SponsoredOfferSurfaces } from "./videoOfferPanel";
+import { WaitEstimator } from "./waitEstimator";
 import {
   OPEN_OFFER_COMMAND,
   SHOW_OFFER_COMMAND,
@@ -19,6 +21,7 @@ import { loadWallet } from "./rewardWallet";
 
 const POLL_INTERVAL_MS = 1000;
 const INSTALLATION_ID_KEY = "devads.installationId";
+const WAIT_HISTORY_KEY = "devads.waitHistory";
 
 // Held at module scope only so deactivate() can end the sponsorship session.
 let activeSponsorshipSession: SponsorshipSession | undefined;
@@ -32,6 +35,7 @@ function readConfig() {
     webAppUrl: cfg.get<string>("webAppUrl", "http://localhost:3000"),
     telemetryEnabled: cfg.get<boolean>("telemetryEnabled", true),
     sponsorshipEnabled: cfg.get<boolean>("sponsorship.enabled", true),
+    sponsorshipVideoEnabled: cfg.get<boolean>("sponsorship.video.enabled", true),
   };
 }
 
@@ -67,9 +71,23 @@ export function activate(context: vscode.ExtensionContext) {
     });
   const sponsorshipSession = new SponsorshipSession(getSponsorshipClient, log);
   activeSponsorshipSession = sponsorshipSession;
-  const sponsoredOfferView = new StatusBarSponsoredOffer();
+  const sponsoredOfferStatusBar = new StatusBarSponsoredOffer();
+  context.subscriptions.push(sponsoredOfferStatusBar);
+  const sponsoredOfferView = new SponsoredOfferSurfaces(
+    sponsoredOfferStatusBar,
+    {
+      open: (offer) => void sponsoredOffers.open(offer),
+      skip: () => void sponsoredOffers.skip(),
+    },
+    () => readConfig().sponsorshipVideoEnabled
+  );
   context.subscriptions.push(sponsoredOfferView);
-  const sponsoredOffers = new SponsoredOfferController({
+  // Local-only command timing history (hashed), used to estimate the wait window.
+  const waitEstimator = new WaitEstimator({
+    get: () => context.workspaceState.get<Record<string, number[]>>(WAIT_HISTORY_KEY) ?? {},
+    set: (value) => void context.workspaceState.update(WAIT_HISTORY_KEY, value),
+  });
+  const sponsoredOffers: SponsoredOfferController = new SponsoredOfferController({
     getClient: getSponsorshipClient,
     session: sponsorshipSession,
     view: sponsoredOfferView,
@@ -200,11 +218,17 @@ export function activate(context: vscode.ExtensionContext) {
     // after the standard flow has had its turn. maybeRequest never throws.
     if (config.enabled && config.sponsorshipEnabled) {
       for (const [, tracker] of trackers) {
+        const command = tracker.currentCommand();
         await sponsoredOffers.maybeRequest(tracker, {
           enabled: true,
           minimumWaitSeconds: config.minimumWaitSeconds,
           isSignedIn,
           standardAdShowing: statusBar.getCurrent() !== null,
+          // No estimate (or video turned off) means only CARD offers are eligible.
+          availableSeconds:
+            config.sponsorshipVideoEnabled && command
+              ? () => waitEstimator.availableSeconds(command, tracker.elapsedSeconds())
+              : undefined,
         });
       }
     }
@@ -242,6 +266,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       shellApi.onDidEndTerminalShellExecution((e) => {
         const tracker = trackers.get(e.terminal);
+        const finished = tracker?.isStillRunning() ? tracker.currentCommand() : null;
+        if (tracker && finished) waitEstimator.record(finished, tracker.elapsedSeconds());
         tracker?.onCommandEnd();
         void reportViewCompleteIfShown();
         sponsoredOffers.onCommandEnd();

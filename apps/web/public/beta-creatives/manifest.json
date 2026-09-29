@@ -1,0 +1,218 @@
+{
+  "generatedBy": "tools/beta-creatives",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "sources": {
+    "devads": "https://github.com/HenryMorganDibie/devads (README)",
+    "schema-watch": "https://github.com/HenryMorganDibie/schema-watch (README)",
+    "web-harvester": "https://github.com/HenryMorganDibie/web-harvester (README, CAPABILITIES.md)",
+    "the-scribe": "https://github.com/HenryMorganDibie/the-scribe (README)"
+  },
+  "creatives": [
+    {
+      "product": "devads",
+      "durationSeconds": 10,
+      "file": "devads-10s.mp4",
+      "poster": "devads-10s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 341976,
+      "sha256": "e253f12e1a4b3461038a40f41e401c7a188d29d1c6e4daed607cc38c8a4541bc",
+      "webm": {
+        "file": "devads-10s.webm",
+        "mimeType": "video/webm",
+        "bytes": 329157,
+        "sha256": "b787dd6351703cd0f890beb55671cb16b2caa954c240f633e3db41b499c39f69"
+      }
+    },
+    {
+      "product": "devads",
+      "durationSeconds": 15,
+      "file": "devads-15s.mp4",
+      "poster": "devads-15s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 495350,
+      "sha256": "b213dd7d028e36cfcf44f5898eb44cecd0a137a620a550ac7e75703b68930b2f",
+      "webm": {
+        "file": "devads-15s.webm",
+        "mimeType": "video/webm",
+        "bytes": 535497,
+        "sha256": "bc2e7a6462517e2ea729c52af13e7de82974c547765071e24adf7b33136f3ae5"
+      }
+    },
+    {
+      "product": "devads",
+      "durationSeconds": 20,
+      "file": "devads-20s.mp4",
+      "poster": "devads-20s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 636174,
+      "sha256": "6a93aaca5b0f657747270f2b8c5f56e56eb18c8dffa4c13fbf8ece200c0925d8",
+      "webm": {
+        "file": "devads-20s.webm",
+        "mimeType": "video/webm",
+        "bytes": 683939,
+        "sha256": "9567dc670fc44320fc46f359a6b3f9ad100d4e3394b2aaa84d993afb0cd0c33f"
+      }
+    },
+    {
+      "product": "schema-watch",
+      "durationSeconds": 10,
+      "file": "schema-watch-10s.mp4",
+      "poster": "schema-watch-10s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 403593,
+      "sha256": "5f78f97bf2de9cd5d9650a44ebb5e3fd3763258f7a85652fff43e6b6e7fe9130",
+      "webm": {
+        "file": "schema-watch-10s.webm",
+        "mimeType": "video/webm",
+        "bytes": 350119,
+        "sha256": "4078266fa2d51da3a9e46e89575fe72df7e35804dc3842acd9750b5dbcaa980c"
+      }
+    },
+    {
+      "product": "schema-watch",
+      "durationSeconds": 15,
+      "file": "schema-watch-15s.mp4",
+      "poster": "schema-watch-15s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 509920,
+      "sha256": "6c59d460df6ebdd1076ae06a563b7a15736d9534837756ab06ae90e0eb3dcaf8",
+      "webm": {
+        "file": "schema-watch-15s.webm",
+        "mimeType": "video/webm",
+        "bytes": 492178,
+        "sha256": "a466fb59407ade3cbc8c07044f0f23bfe10dc36e2ec02858e4857340d1f8e934"
+      }
+    },
+    {
+      "product": "schema-watch",
+      "durationSeconds": 20,
+      "file": "schema-watch-20s.mp4",
+      "poster": "schema-watch-20s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 700942,
+      "sha256": "d21c2e781c9c985794b5476c1d9ef75de60993a8179742385b793f12b56f2b71",
+      "webm": {
+        "file": "schema-watch-20s.webm",
+        "mimeType": "video/webm",
+        "bytes": 657463,
+        "sha256": "e02706527bc49c863efa15a27d5dce01edf47b044a16ef497e50ea6f19fecb2f"
+      }
+    },
+    {
+      "product": "the-scribe",
+      "durationSeconds": 10,
+      "file": "the-scribe-10s.mp4",
+      "poster": "the-scribe-10s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 375074,
+      "sha256": "add6be411ce5f12cffd4d041317e772523667306ebe46e428f163f1ec22f3bc7",
+      "webm": {
+        "file": "the-scribe-10s.webm",
+        "mimeType": "video/webm",
+        "bytes": 386839,
+        "sha256": "d5a7bec35e9b7b6a845c095ea3bfc6cffdaedc663dd54a3fa7bb810d1adf2726"
+      }
+    },
+    {
+      "product": "the-scribe",
+      "durationSeconds": 15,
+      "file": "the-scribe-15s.mp4",
+      "poster": "the-scribe-15s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 481788,
+      "sha256": "78c04f6e958e5c75245f517a72c28fe557e9b8585a01c1fb8ec1185805433360",
+      "webm": {
+        "file": "the-scribe-15s.webm",
+        "mimeType": "video/webm",
+        "bytes": 535480,
+        "sha256": "57936eef13dbcfc7ade3bba22638e190a5280dda0dcb3951a1cba7b4eb77273c"
+      }
+    },
+    {
+      "product": "the-scribe",
+      "durationSeconds": 20,
+      "file": "the-scribe-20s.mp4",
+      "poster": "the-scribe-20s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 625433,
+      "sha256": "0bb402a5aa04394d4588cbb08cbc731912b84ebc9937a1d26c066649417977ec",
+      "webm": {
+        "file": "the-scribe-20s.webm",
+        "mimeType": "video/webm",
+        "bytes": 653753,
+        "sha256": "77792e91a4832bd0481104dd38deeaed4b7f45a2aa01a65903f67b895444e70c"
+      }
+    },
+    {
+      "product": "web-harvester",
+      "durationSeconds": 10,
+      "file": "web-harvester-10s.mp4",
+      "poster": "web-harvester-10s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 436509,
+      "sha256": "edafc3d8980df1b715dda68b4b18fab4b4bcb394d377f4d248acc93a25a0fedc",
+      "webm": {
+        "file": "web-harvester-10s.webm",
+        "mimeType": "video/webm",
+        "bytes": 409157,
+        "sha256": "d08d7cf93315a4c11e92b4c8047aebdb34e2c1a78336f6f1fc4fd79dc33b3faf"
+      }
+    },
+    {
+      "product": "web-harvester",
+      "durationSeconds": 15,
+      "file": "web-harvester-15s.mp4",
+      "poster": "web-harvester-15s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 557675,
+      "sha256": "bd7e75c90d2c907ea7be9add5732b6bc1961dce7d0d122c568a2012b2dfaed62",
+      "webm": {
+        "file": "web-harvester-15s.webm",
+        "mimeType": "video/webm",
+        "bytes": 603051,
+        "sha256": "76f5f96cf68bb6024cae988ce6efd9624134bb6ee000f774afa3725c7929eb6b"
+      }
+    },
+    {
+      "product": "web-harvester",
+      "durationSeconds": 20,
+      "file": "web-harvester-20s.mp4",
+      "poster": "web-harvester-20s.jpg",
+      "mimeType": "video/mp4",
+      "width": 1280,
+      "height": 720,
+      "bytes": 707079,
+      "sha256": "8a6f0299fd59cd69331885aace4275506cf3b73d51433cb280217ce477002e98",
+      "webm": {
+        "file": "web-harvester-20s.webm",
+        "mimeType": "video/webm",
+        "bytes": 720938,
+        "sha256": "9b9777320578624f641ffcf0d97c3a2ed32729f8cdba6d7ee05c69e815a77628"
+      }
+    }
+  ]
+}

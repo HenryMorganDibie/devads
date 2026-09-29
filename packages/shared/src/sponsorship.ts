@@ -74,6 +74,44 @@ export type RewardSourceDTO = z.infer<typeof RewardSourceSchema>;
 /** Seconds a developer must engage with an opened offer before completing (0 to 1 hour). */
 export const MinEngagementSecondsSchema = z.number().int().min(0).max(3600);
 
+// ---------------------------------------------------------------------------
+// Presentation and creatives
+//
+// An offer's presentation mode tells clients how to present it. CARD is the
+// original text card. VIDEO offers carry one creative per length; the server
+// picks the longest one that fits the wait window the client reports, and
+// serves no video at all when the window is shorter than
+// MIN_VIDEO_WINDOW_SECONDS or unknown. New creative kinds extend
+// CreativeKindSchema without changing the offer shape.
+// ---------------------------------------------------------------------------
+
+export const PresentationModeSchema = z.enum(["CARD", "VIDEO"]);
+export type PresentationMode = z.infer<typeof PresentationModeSchema>;
+
+export const CreativeKindSchema = z.enum(["VIDEO"]);
+export type CreativeKind = z.infer<typeof CreativeKindSchema>;
+
+/** Below this many seconds of available wait, no video creative is served. */
+export const MIN_VIDEO_WINDOW_SECONDS = 10;
+
+/** Upper bound for a reported wait window (one hour), matching engagement bounds. */
+export const AvailableWaitSecondsSchema = z.coerce.number().int().min(0).max(3600);
+
+export const OfferCreativeSchema = z.object({
+  id: z.string(),
+  kind: CreativeKindSchema,
+  /** Preferred source. */
+  url: z.string().url(),
+  mimeType: z.string(),
+  /** Optional second source for players that cannot use the first; list it after `url`. */
+  fallback: z.object({ url: z.string().url(), mimeType: z.string() }).nullable().optional(),
+  posterUrl: z.string().url().nullable(),
+  durationSeconds: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+export type OfferCreative = z.infer<typeof OfferCreativeSchema>;
+
 export const SponsorshipEventTypeSchema = z.enum([
   "OFFER_REQUESTED",
   "OFFER_DISPLAYED",
@@ -130,6 +168,12 @@ export type DevelopmentSessionDTO = z.infer<typeof DevelopmentSessionDTOSchema>;
 export const SponsoredOfferRequestSchema = z.object({
   clientType: DevClientTypeSchema.optional(),
   sessionId: z.string().min(1).optional(),
+  /**
+   * The client's estimate of how many more seconds the current wait will
+   * last. Only coarse timing: no command, file or content. Required for a
+   * VIDEO offer to be served; omitted = only CARD offers are eligible.
+   */
+  availableWaitSeconds: AvailableWaitSecondsSchema.optional(),
 });
 export type SponsoredOfferRequest = z.infer<typeof SponsoredOfferRequestSchema>;
 
@@ -149,6 +193,10 @@ export const SponsoredOfferCandidateSchema = z.object({
   campaignMode: CampaignModeSchema.optional(),
   /** When present, a completion only qualifies this many seconds after OFFER_OPENED. */
   minEngagementSeconds: MinEngagementSecondsSchema.nullable().optional(),
+  /** Absent from older servers; treat as CARD. */
+  presentationMode: PresentationModeSchema.optional(),
+  /** The creative chosen for this display (VIDEO offers); never longer than the reported wait window. */
+  creative: OfferCreativeSchema.nullable().optional(),
 });
 export type SponsoredOfferCandidate = z.infer<typeof SponsoredOfferCandidateSchema>;
 

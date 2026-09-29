@@ -3,6 +3,28 @@ import { describeError, isRetryableCompletionError, isStaleSessionError } from "
 import { canClaimCompletionOnOpen, formatReward } from "./rewards.js";
 import type { AdapterHost, ProtocolClient, ProtocolClientProvider, SessionProvider, WaitHandle } from "./types.js";
 
+/** Whole seconds left in the wait per the host, clamped to the protocol's 0-3600 range. */
+function windowSeconds(wait: WaitHandle): number | undefined {
+  try {
+    const v = wait.availableSeconds?.();
+    if (v === undefined || !Number.isFinite(v)) return undefined;
+    return Math.min(3600, Math.max(0, Math.floor(v)));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A VIDEO offer is presentable only with a creative no longer than the
+ * wait still available. CARD offers (and offers from older servers without
+ * a presentation mode) always fit.
+ */
+export function fitsWindow(offer: SponsoredOpportunity, availableSeconds: number | undefined): boolean {
+  if (offer.presentationMode !== "VIDEO") return true;
+  if (!offer.creative || availableSeconds === undefined) return false;
+  return offer.creative.durationSeconds <= availableSeconds;
+}
+
 export interface SponsoredOfferRuntimeDeps {
   getClient: ProtocolClientProvider;
   session: SessionProvider;
@@ -59,9 +81,13 @@ export class SponsoredOfferRuntime {
 
       const sessionId = this.deps.session.currentSessionId() ?? (await this.deps.session.start()) ?? undefined;
 
+      const available = windowSeconds(wait);
       let offer: SponsoredOpportunity | null;
       try {
-        offer = await client.requestSponsoredOpportunity(sessionId ? { sessionId } : {});
+        offer = await client.requestSponsoredOpportunity({
+          ...(sessionId ? { sessionId } : {}),
+          ...(available !== undefined ? { availableWaitSeconds: available } : {}),
+        });
       } catch (err) {
         if (isStaleSessionError(err)) this.deps.session.invalidate();
         this.log(`sponsored offer request failed: ${describeError(err)}`);
@@ -70,6 +96,11 @@ export class SponsoredOfferRuntime {
 
       // Never show anything after the wait is over.
       if (!offer || !wait.isActive()) return;
+      // Never start a video that no longer fits: time passed during the request.
+      if (!fitsWindow(offer, windowSeconds(wait))) {
+        this.log("sponsored video not presented: no longer fits the wait window");
+        return;
+      }
 
       this.current = { offer, sessionId };
       this.lastShown = this.current;

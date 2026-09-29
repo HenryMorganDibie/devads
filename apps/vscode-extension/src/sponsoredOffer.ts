@@ -59,6 +59,12 @@ export interface OfferTickInput {
   isSignedIn: boolean;
   /** True if the standard ad status bar item is currently showing an ad. */
   standardAdShowing: boolean;
+  /**
+   * Local estimate of whole seconds left in this wait (see WaitEstimator), or
+   * undefined for none. Only the number is sent; without it the server
+   * serves no video offer.
+   */
+  availableSeconds?: () => number | undefined;
 }
 
 export class SponsoredOfferController {
@@ -116,7 +122,10 @@ export class SponsoredOfferController {
       // screen for this wait, don't stack a sponsored offer next to it.
       if (input.standardAdShowing) return;
 
-      await this.runtime.offerDuringWait({ isActive: () => tracker.isStillRunning() });
+      await this.runtime.offerDuringWait({
+        isActive: () => tracker.isStillRunning(),
+        availableSeconds: input.availableSeconds,
+      });
     } catch {
       this.deps.log?.("sponsored offer tick failed: unexpected_error");
     }

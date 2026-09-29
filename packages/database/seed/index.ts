@@ -1,6 +1,7 @@
 import { PrismaClient, UserRole, CampaignStatus, CreativeType } from "@prisma/client";
 import { randomBytes, scryptSync } from "node:crypto";
 import { seedBetaCampaign } from "./beta.js";
+import { seedBetaVideoCampaigns } from "./betaVideo.js";
 
 const prisma = new PrismaClient();
 
@@ -328,6 +329,7 @@ async function main() {
 
   // The DevAds developer beta campaign (production-safe; also `npm run seed:beta`).
   await seedBetaCampaign(prisma, process.env.BETA_SITE_URL ?? "http://localhost:3000");
+  await seedBetaVideoCampaigns(prisma, process.env.BETA_SITE_URL ?? "http://localhost:3000");
 
   console.log("Seed complete:");
   console.log(`  Admin:      admin@devads.dev / admin12345 (id ${admin.id})`);
