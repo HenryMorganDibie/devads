@@ -143,7 +143,9 @@ completion transaction, so the two can't drift apart.
   requires an offer. Fill-rate analytics can add them later.
 - **Protocol/SDK package, VS Code extension changes and adapters for other
   clients** (Claude Code, Codex, Gemini, Cursor, OpenCode, Aider, custom or
-  local agents). None exist, not even as stubs. Adapters would authenticate
+  local agents). None exist, not even as stubs. *SDK added in Phase 2, VS
+  Code client in Phase 3, adapter runtime and boundary in Phase 6; adapters
+  for other clients still do not exist (see [adapters.md](./adapters.md)).* Adapters would authenticate
   the same way the VS Code extension does today (session bearer token via
   device auth). No API-key or machine-auth mechanism exists. That is a known
   gap for non-interactive agents.
@@ -215,12 +217,12 @@ Contract rules:
   table, which is not exported. Nothing in the public interface names VS
   Code or any other specific tool.
 
-**Status of clients.** Nothing consumes the SDK yet. Phase 3 will move the
-VS Code extension onto it. Later, a Phase 6 adapter for another tool (Claude
-Code, Codex, Gemini, Cursor, OpenCode, Aider, or a custom or local agent)
-would build against this same client. None of those adapters exist, not even
-as stubs, and no AI-provider integration exists. The only trace of those
-tools is the shared `DevClientType` enum value each would send.
+**Status of clients.** The VS Code extension consumes the SDK (Phase 3).
+An adapter for another tool (Claude Code, Codex, Gemini, Cursor, OpenCode,
+Aider, or a custom or local agent) would build against this same client and
+the Phase 6 adapter runtime. None of those adapters exist, not even as
+stubs, and no AI-provider integration exists. The only trace of those tools
+is the shared `DevClientType` enum value each would send.
 
 ## VS Code extension as the first protocol client (Phase 3)
 
@@ -289,7 +291,8 @@ wait it can already observe, report interactions against `displayEventId`,
 count only qualifying actions the tool can honestly observe, and degrade to
 "no offer" on any failure. Only the VS Code extension does this today.
 Adapters for Claude Code, Codex, Gemini, Cursor, OpenCode, Aider or custom
-and local agents are not built, not even as stubs.
+and local agents are not built, not even as stubs. *Phase 6 moved the
+host-agnostic part of this pattern into the SDK; see below.*
 
 Known gaps found while integrating (not patched in the SDK or server):
 
@@ -623,3 +626,50 @@ Not done here:
   activity; `services/fraud` is still a stub, and there is no reversal route,
   so an admin who finds abuse can pause the campaign but cannot reverse a
   reward.
+
+## Adapter runtime and integration boundary (Phase 6)
+
+Full guide: [adapters.md](./adapters.md). Summary:
+
+- **Adapter runtime in the SDK.** `packages/ad-sdk/src/adapter/` holds the
+  part of every client that does not depend on the tool:
+  `DevelopmentSessionManager` (one shared in-flight start, failure
+  tolerance, stale-session invalidation) and `SponsoredOfferRuntime`
+  (request during a wait, present only while it is active, one offer at a
+  time, skip / interact / open / complete against `displayEventId`, the
+  open-only completion policy, retry vs. final refusal, never throwing).
+  Both were extracted from the VS Code extension's Phase 3 modules with the
+  same behavior. The runtime imports nothing outside the SDK.
+- **Host contract.** A client implements `AdapterHost` (`presentOffer`,
+  `dismissOffer`, `openExternal`, optional `notify` and `log`) and passes a
+  `WaitHandle` (`isActive()`) for each natural wait it already observes.
+  That is the entire tool-specific surface.
+- **VS Code is now a host.** `sponsorshipSession.ts` re-exports the SDK's
+  session manager, and `SponsoredOfferController` keeps only the extension's
+  own policy (the terminal-wait eligibility gate, once per command run, no
+  offer alongside a standard ad) and delegates the lifecycle to the
+  runtime. Its public module API is unchanged and its existing tests pass
+  without modification. The standard ad flow is untouched.
+- **Integration registry.** `CLIENT_INTEGRATIONS` records, per
+  `DevClientType`, whether DevAds ships an adapter. Only `VS_CODE` is
+  `IMPLEMENTED`; a test enforces that and that the implementation path is a
+  real SDK consumer in this repository.
+- **No core changes.** No schema, migration, route, targeting, accounting
+  or DTO change was needed. A new end-to-end test drives the full loop
+  through a hypothetical `OTHER` client written only against the public SDK
+  (sponsored by a conference, rewarding a non-AI reward type), and a static
+  test keeps named client types and AI vendor names out of the server,
+  targeting and shared sources.
+
+Not done here, deliberately:
+
+- **No adapter for any other tool.** Each needs a documented, permitted
+  extension surface that is separate from the model's context; the checklist
+  per target is in [adapters.md](./adapters.md#what-a-legitimate-integration-for-each-target-would-need).
+- **No machine credential** for headless agents. Device auth works for
+  interactive CLIs; a non-interactive credential belongs with the fraud work.
+- **No verified outcome events** (SDK init, deploy, registration). They need
+  a server-side attestation source, not client heuristics, and the objective
+  enum already leaves room for them.
+- **Cursor attribution.** If the VS Code extension runs in Cursor (untested),
+  it reports `VS_CODE`.

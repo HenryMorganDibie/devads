@@ -1,14 +1,16 @@
 // DevAds Protocol SDK -- public entry point.
 //
 // Exposes the client, its option/input/result types (all built from the
-// @devads/shared sponsorship DTOs), and the error type. The route table and
-// HTTP transport are internal and intentionally not exported.
+// @devads/shared sponsorship DTOs), the error type, and the host-agnostic
+// adapter runtime. The route table and HTTP transport are internal and
+// intentionally not exported.
 
 import { DevClientTypeSchema } from "@devads/shared";
 import type { DevClientType } from "./types.js";
 
 export { DevAdsClient, type DevAdsClientOptions } from "./client.js";
 export { DevAdsError, isDevAdsError, type DevAdsErrorCode } from "./errors.js";
+export * from "./adapter/index.js";
 export type { FetchLike, FetchLikeInit, FetchLikeResponse } from "./transport.js";
 export type {
   DevAdsCredentials,

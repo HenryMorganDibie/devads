@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DevAdsClient, isDevAdsError, type FetchLike } from "@devads/ad-sdk";
+import { DevAdsClient, describeError, isStaleSessionError, type FetchLike } from "@devads/ad-sdk";
 
 /**
  * The slice of the DevAds Protocol client the extension uses. Declared as a
@@ -61,16 +61,7 @@ export function createSponsorshipClient(config: SponsorshipClientConfig): Sponso
 }
 
 /** Short, log-safe description of an SDK failure (code + server reason; never request contents). */
-export function describeSponsorshipError(err: unknown): string {
-  if (isDevAdsError(err)) return err.reason ? `${err.code} (${err.reason})` : err.code;
-  return "unexpected_error";
-}
+export const describeSponsorshipError = describeError;
 
 /** Server reasons that mean the cached session id is no longer usable. */
-export function isStaleSessionError(err: unknown): boolean {
-  return (
-    isDevAdsError(err) &&
-    err.code === "rejected" &&
-    (err.reason === "session_ended" || err.reason === "forbidden" || err.reason === "session_not_found")
-  );
-}
+export { isStaleSessionError };
