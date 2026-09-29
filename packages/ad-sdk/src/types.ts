@@ -6,6 +6,8 @@ import type {
   RewardTypeDTO,
   RewardWalletResponse,
   SponsoredOfferCandidate,
+  SponsoredOfferListing,
+  SponsoredOfferListResponse,
   SponsorshipEventResponse,
 } from "@devads/shared";
 
@@ -26,6 +28,13 @@ export type RewardType = RewardTypeDTO;
 export type DevelopmentSession = DevelopmentSessionDTO;
 /** A server-selected sponsored offer. `displayEventId` is the server-issued id every later event must reference. */
 export type SponsoredOpportunity = SponsoredOfferCandidate;
+/**
+ * A live offer the developer is eligible for, from the read-only listing.
+ * It has no `displayEventId`: listing is not a display, so a listed offer
+ * cannot be reported against or completed.
+ */
+export type SponsoredOpportunityListing = SponsoredOfferListing;
+export type SponsoredOpportunityList = SponsoredOfferListResponse;
 export type RewardWallet = RewardWalletResponse;
 
 /** A value, or a (possibly async) function returning it, re-read on every call so token refresh/sign-out is picked up. */
@@ -53,6 +62,11 @@ export interface SessionContext {
 export interface OpportunityContext {
   /** When given, the server uses the session's client type. */
   sessionId?: string;
+  clientType?: DevClientType;
+}
+
+export interface OpportunityListFilter {
+  /** Only list offers servable in this client type. Omitted (and no client default) = every client type. */
   clientType?: DevClientType;
 }
 

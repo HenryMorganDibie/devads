@@ -195,3 +195,49 @@ export function selectSponsoredOffer(input: SelectSponsoredOfferInput): Sponsors
   if (eligible.length === 0) return null;
   return eligible.reduce((best, c) => (c.sponsorChargeCents > best.sponsorChargeCents ? c : best), eligible[0]);
 }
+
+export interface ListEligibleSponsoredOffersInput {
+  candidates: SponsorshipCandidate[];
+  /** clientType is optional here: omitted = do not filter by client type. */
+  dev: Omit<SponsorshipDeveloperContext, "clientType"> & { clientType?: string };
+  budgetByCampaignId: Record<string, BudgetUsage>;
+  rewardCountsByCampaignId: Record<string, DeveloperRewardCounts>;
+  now?: Date;
+}
+
+/**
+ * Read-only browsing counterpart to selectSponsoredOffer: every candidate the
+ * developer could currently be served and rewarded for, in the caller's
+ * order, instead of one winner.
+ *
+ * Applies the same predicates as selection (live -> developer/client
+ * eligible -> budget remaining -> developer reward caps) with two deliberate
+ * differences:
+ *  - No display frequency cap. That cap limits how often an offer is SERVED
+ *    to a tool today; it says nothing about whether the offer is running or
+ *    whether the developer may still earn from it, and a listing is not a
+ *    display. This function therefore takes no display history at all.
+ *  - clientType is optional. Without one, client-type restrictions are not
+ *    applied and the caller shows each offer's eligibleClientTypes instead.
+ */
+export function listEligibleSponsoredOffers(input: ListEligibleSponsoredOffersInput): SponsorshipCandidate[] {
+  const now = input.now ?? new Date();
+  const { clientType } = input.dev;
+
+  return input.candidates.filter((c) => {
+    if (!isSponsorshipLive(c, now)) return false;
+
+    const eligible =
+      clientType === undefined
+        ? // Same opt-in and category rules, minus the client-type restriction.
+          isDeveloperEligibleForSponsorship({ ...c, eligibleClientTypes: [] }, { ...input.dev, clientType: "" })
+        : isDeveloperEligibleForSponsorship(c, { ...input.dev, clientType });
+    if (!eligible) return false;
+
+    const usage = input.budgetByCampaignId[c.campaignId] ?? { spentTodayCents: 0, spentTotalCents: 0 };
+    if (!hasSponsorshipBudgetRemaining(c, usage)) return false;
+
+    const counts = input.rewardCountsByCampaignId[c.campaignId] ?? { earnedToday: 0, earnedLifetime: 0 };
+    return developerRewardCapReached(c, counts) === null;
+  });
+}

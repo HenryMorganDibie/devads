@@ -4,8 +4,10 @@ import {
   isClientTypeEligible,
   isDeveloperEligibleForSponsorship,
   isSponsorshipLive,
+  listEligibleSponsoredOffers,
   selectSponsoredOffer,
   wouldExceedSponsorshipBudget,
+  type ListEligibleSponsoredOffersInput,
   type SelectSponsoredOfferInput,
   type SponsorshipCandidate,
 } from "../sponsorshipEligibility";
@@ -157,5 +159,64 @@ describe("selectSponsoredOffer", () => {
         expect(result?.rewardType).toBe(rewardType);
       }
     }
+  });
+});
+
+describe("listEligibleSponsoredOffers", () => {
+  function list(overrides: Partial<ListEligibleSponsoredOffersInput> = {}) {
+    return listEligibleSponsoredOffers({
+      candidates: [candidate()],
+      dev: { developerId: "dev_1", enabled: true },
+      budgetByCampaignId: {},
+      rewardCountsByCampaignId: {},
+      now,
+      ...overrides,
+    });
+  }
+
+  it("returns every eligible candidate in the caller's order, not a single winner", () => {
+    const a = candidate({ campaignId: "a", offerId: "o_a", sponsorChargeCents: 50 });
+    const b = candidate({ campaignId: "b", offerId: "o_b", sponsorChargeCents: 500 });
+    expect(list({ candidates: [a, b] }).map((c) => c.offerId)).toEqual(["o_a", "o_b"]);
+  });
+
+  it("drops non-live, budget-exhausted and reward-capped candidates", () => {
+    const candidates = [
+      candidate({ campaignId: "live", offerId: "o_live" }),
+      candidate({ campaignId: "paused", status: "PAUSED" }),
+      candidate({ campaignId: "ended", endDate: new Date("2026-09-29T11:00:00Z") }),
+      candidate({ campaignId: "expired", offerExpiresAt: new Date("2026-09-29T11:00:00Z") }),
+      candidate({ campaignId: "broke", totalBudgetCents: 150 }),
+      candidate({ campaignId: "capped", developerLifetimeCap: 1 }),
+    ];
+    const result = list({
+      candidates,
+      budgetByCampaignId: { broke: { spentTodayCents: 100, spentTotalCents: 100 } },
+      rewardCountsByCampaignId: { capped: { earnedToday: 0, earnedLifetime: 1 } },
+    });
+    expect(result.map((c) => c.campaignId)).toEqual(["live"]);
+  });
+
+  it("returns nothing for a developer who has opted out, and honours category opt-outs", () => {
+    expect(list({ dev: { developerId: "dev_1", enabled: false } })).toEqual([]);
+    const c = candidate({ sponsorCategory: "Crypto" });
+    expect(list({ candidates: [c], dev: { developerId: "dev_1", enabled: true, categoriesOptOut: ["crypto"] } })).toEqual([]);
+  });
+
+  it("filters by client type only when one is given", () => {
+    const vscodeOnly = candidate({ campaignId: "v", eligibleClientTypes: ["VS_CODE"] });
+    const anyClient = candidate({ campaignId: "any" });
+    expect(list({ candidates: [vscodeOnly, anyClient] }).map((c) => c.campaignId)).toEqual(["v", "any"]);
+    expect(
+      list({ candidates: [vscodeOnly, anyClient], dev: { developerId: "dev_1", enabled: true, clientType: "CODEX" } }).map(
+        (c) => c.campaignId
+      )
+    ).toEqual(["any"]);
+  });
+
+  it("does not apply the display frequency cap (a listing is not a display)", () => {
+    // frequencyCapPerDay of 1 would block selection after one display; the
+    // listing has no display history input at all and still lists it.
+    expect(list({ candidates: [candidate({ frequencyCapPerDay: 1 })] })).toHaveLength(1);
   });
 });

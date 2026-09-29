@@ -137,6 +137,35 @@ export const SponsoredOfferResponseSchema = z.object({
 });
 export type SponsoredOfferResponse = z.infer<typeof SponsoredOfferResponseSchema>;
 
+// ---------------------------------------------------------------------------
+// Read-only offer listing (browse, not select)
+//
+// GET /api/v1/sponsorships/offers lists the live offers a developer is
+// eligible for without selecting one: it records no SponsorshipEvent, spends
+// no display/frequency cap and never touches sponsor spend or display stats.
+// A listed offer therefore has no displayEventId and cannot be reported
+// against or completed; only an offer served by the selection endpoint can.
+// ---------------------------------------------------------------------------
+
+export const SponsoredOfferListRequestSchema = z.object({
+  /** Optional: when given, only offers eligible for this client type are listed. */
+  clientType: DevClientTypeSchema.optional(),
+});
+export type SponsoredOfferListRequest = z.infer<typeof SponsoredOfferListRequestSchema>;
+
+export const SponsoredOfferListingSchema = SponsoredOfferCandidateSchema.omit({ displayEventId: true }).extend({
+  /** Client types the offer can be served in. Empty = every client type. */
+  eligibleClientTypes: z.array(DevClientTypeSchema),
+});
+export type SponsoredOfferListing = z.infer<typeof SponsoredOfferListingSchema>;
+
+export const SponsoredOfferListResponseSchema = z.object({
+  /** The developer's opt-in. When false, `offers` is always empty. */
+  sponsoredContentEnabled: z.boolean(),
+  offers: z.array(SponsoredOfferListingSchema),
+});
+export type SponsoredOfferListResponse = z.infer<typeof SponsoredOfferListResponseSchema>;
+
 export const SponsorshipEventRequestSchema = z.object({
   eventId: z.string().min(1).max(128),
   type: ClientSponsorshipEventTypeSchema,

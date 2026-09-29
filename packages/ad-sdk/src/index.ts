@@ -18,11 +18,14 @@ export type {
   OfferEventResult,
   OfferInteractionType,
   OpportunityContext,
+  OpportunityListFilter,
   QualifyingActionInput,
   RewardType,
   RewardWallet,
   SessionContext,
   SponsoredOpportunity,
+  SponsoredOpportunityList,
+  SponsoredOpportunityListing,
   ValueSource,
 } from "./types.js";
 

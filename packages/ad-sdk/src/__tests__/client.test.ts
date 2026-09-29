@@ -234,6 +234,84 @@ describe("DevAdsClient.requestSponsoredOpportunity", () => {
   });
 });
 
+describe("DevAdsClient.listSponsoredOpportunities", () => {
+  const { displayEventId: _d, ...listed } = offerDTO;
+  const listing = { ...listed, eligibleClientTypes: ["VS_CODE"] };
+  const second = { ...listing, offerId: "offer_2", campaignId: "camp_2", rewardType: "API_CREDITS", eligibleClientTypes: [] };
+  const listDTO = { sponsoredContentEnabled: true, offers: [listing, second] };
+
+  it("GETs the read-only listing endpoint (not the selection endpoint) and returns every offer", async () => {
+    const { fetch, calls } = mockFetch([{ body: listDTO }]);
+    const result = await makeClient(fetch).listSponsoredOpportunities();
+
+    expect(result).toEqual(listDTO);
+    expect(result.offers).toHaveLength(2);
+    expect(calls).toHaveLength(1);
+    const url = new URL(calls[0].url);
+    expect(url.origin + url.pathname).toBe(`${BASE}/api/v1/sponsorships/offers`);
+    expect(url.searchParams.get("clientType")).toBe("VS_CODE");
+    expect(calls[0].init.method).toBe("GET");
+    expect(calls[0].init.body).toBeUndefined();
+    expect(calls[0].init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("lets the filter override the default client type", async () => {
+    const { fetch, calls } = mockFetch([{ body: listDTO }]);
+    await makeClient(fetch).listSponsoredOpportunities({ clientType: "AIDER" });
+    expect(calls[0].url).toBe(`${BASE}/api/v1/sponsorships/offers?clientType=AIDER`);
+  });
+
+  it("lists every client type when the client has no default and no filter is given", async () => {
+    const { fetch, calls } = mockFetch([{ body: listDTO }]);
+    await makeClient(fetch, { clientType: undefined }).listSponsoredOpportunities();
+    expect(calls[0].url).toBe(`${BASE}/api/v1/sponsorships/offers`);
+  });
+
+  it("returns an opted-out, empty list as-is", async () => {
+    const { fetch } = mockFetch([{ body: { sponsoredContentEnabled: false, offers: [] } }]);
+    expect(await makeClient(fetch).listSponsoredOpportunities()).toEqual({ sponsoredContentEnabled: false, offers: [] });
+  });
+
+  it("rejects an unknown client type without sending", async () => {
+    const { fetch, calls } = mockFetch([{ body: listDTO }]);
+    const err = await rejection(makeClient(fetch).listSponsoredOpportunities({ clientType: "NOTEPAD" as never }));
+    expect(err.code).toBe("invalid_request");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("strips a displayEventId the server should never send, so a listing can't be reported as a display", async () => {
+    const { fetch } = mockFetch([{ body: { ...listDTO, offers: [{ ...listing, displayEventId: "disp_x" }] } }]);
+    const result = await makeClient(fetch).listSponsoredOpportunities();
+    expect(result.offers[0]).not.toHaveProperty("displayEventId");
+  });
+
+  it("rejects fractional reward amounts, unknown reward types and a missing opt-in flag", async () => {
+    for (const bad of [
+      { ...listDTO, offers: [{ ...listing, rewardAmountUnits: 2.5 }] },
+      { ...listDTO, offers: [{ ...listing, rewardType: "DOGECOIN" }] },
+      { ...listDTO, offers: [{ ...listing, eligibleClientTypes: ["NOTEPAD"] }] },
+      { offers: [listing] },
+      { sponsoredContentEnabled: true, offers: null },
+    ]) {
+      const { fetch } = mockFetch([{ body: bad }]);
+      expect((await rejection(makeClient(fetch).listSponsoredOpportunities())).code).toBe("invalid_response");
+    }
+  });
+
+  it("surfaces server refusals with the reason", async () => {
+    const { fetch } = mockFetch([{ status: 404, body: { error: "developer_not_found" } }]);
+    const err = await rejection(makeClient(fetch).listSponsoredOpportunities());
+    expect(err).toMatchObject({ code: "rejected", status: 404, reason: "developer_not_found" });
+  });
+
+  it("fails fast as unauthenticated without a token", async () => {
+    const { fetch, calls } = mockFetch([{ body: listDTO }]);
+    const client = makeClient(fetch, { credentials: { token: () => undefined } });
+    expect((await rejection(client.listSponsoredOpportunities())).code).toBe("unauthenticated");
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("DevAdsClient.reportOfferEvent", () => {
   it.each(["OFFER_SKIPPED", "OFFER_OPENED", "OFFER_INTERACTED"] as const)(
     "POSTs a %s event referencing the displayEventId",

@@ -2,6 +2,8 @@ import type { z } from "zod";
 import {
   DevelopmentSessionDTOSchema,
   RewardWalletResponseSchema,
+  SponsoredOfferListRequestSchema,
+  SponsoredOfferListResponseSchema,
   SponsoredOfferRequestSchema,
   SponsoredOfferResponseSchema,
   SponsorshipEventRequestSchema,
@@ -18,10 +20,12 @@ import type {
   OfferEventInput,
   OfferEventResult,
   OpportunityContext,
+  OpportunityListFilter,
   QualifyingActionInput,
   RewardWallet,
   SessionContext,
   SponsoredOpportunity,
+  SponsoredOpportunityList,
   ValueSource,
 } from "./types.js";
 
@@ -125,6 +129,24 @@ export class DevAdsClient {
       query: { clientType: query.clientType, sessionId: query.sessionId },
     });
     return res.offer;
+  }
+
+  /**
+   * Lists the live sponsored offers the developer is currently eligible for,
+   * for browsing. Read-only: unlike requestSponsoredOpportunity() it records
+   * nothing server-side, spends no display cap and returns offers without a
+   * displayEventId, so they cannot be reported or completed. The client type
+   * defaults to the client's configured one; a client without one lists
+   * offers for every client type. `offers` is always empty when the
+   * developer has sponsored content turned off (`sponsoredContentEnabled`).
+   */
+  async listSponsoredOpportunities(filter: OpportunityListFilter = {}): Promise<SponsoredOpportunityList> {
+    const query = validateRequest(SponsoredOfferListRequestSchema, {
+      clientType: filter.clientType ?? this.defaults.clientType,
+    });
+    return this.call(ROUTES.listOffers.method, ROUTES.listOffers.path(), SponsoredOfferListResponseSchema, {
+      query: { clientType: query.clientType },
+    });
   }
 
   /** Reports a non-economic interaction (skipped / opened / interacted). Idempotent on eventId. */

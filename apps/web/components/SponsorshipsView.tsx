@@ -1,7 +1,15 @@
 import Link from "next/link";
-import type { SponsorshipStatusResult } from "../lib/sponsorships";
+import { formatLedgerDate, formatUnits, rewardTypeLabel } from "../lib/rewards";
+import {
+  formatEligibleClients,
+  isReceivableToday,
+  type ActiveSponsorship,
+  type ActiveSponsorshipsResult,
+  type SponsorshipStatusResult,
+} from "../lib/sponsorships";
 
 export type SponsorshipsPageState = { status: "loading" } | SponsorshipStatusResult;
+export type ActiveSponsorshipsState = { status: "loading" } | ActiveSponsorshipsResult;
 
 /** Visible label used wherever sponsored material is referenced, so it never reads as organic content. */
 export function SponsoredBadge() {
@@ -56,8 +64,115 @@ function StatusCard({ state, onRetry }: { state: SponsorshipsPageState; onRetry?
   );
 }
 
+function OfferCard({ offer }: { offer: ActiveSponsorship }) {
+  const receivable = isReceivableToday(offer);
+  return (
+    <li className="border-t border-white/5 pt-4" data-offer-id={offer.offerId}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+        <h3 className="font-medium">{offer.title}</h3>
+        <p className="text-sm">
+          <span className="text-muted">Reward:</span>{" "}
+          <span className="font-semibold">
+            {formatUnits(offer.rewardAmountUnits)} {rewardTypeLabel(offer.rewardType)}
+          </span>
+        </p>
+      </div>
+      <p className="text-sm text-muted mb-2">{offer.description}</p>
+      {offer.requiredAction && (
+        <p className="text-sm mb-1">
+          <span className="text-muted">To earn it:</span> {offer.requiredAction}
+        </p>
+      )}
+      <p className="text-xs text-muted">
+        Available in: {formatEligibleClients(offer.eligibleClientTypes)}
+        {offer.expiresAt && <> &middot; Ends {formatLedgerDate(offer.expiresAt)} (UTC)</>}
+      </p>
+      {!receivable && (
+        <p className="text-xs text-yellow-400/80 mt-1">
+          Not available in a tool DevAds supports yet, so you can&apos;t receive this one today.
+        </p>
+      )}
+    </li>
+  );
+}
+
+function ActiveSponsorshipsList({ offers, onRetry }: { offers: ActiveSponsorshipsState; onRetry?: () => void }) {
+  if (offers.status === "loading") {
+    return <p className="text-sm text-muted">Loading active sponsorships...</p>;
+  }
+  if (offers.status === "unauthenticated") {
+    return (
+      <p className="text-sm">
+        Your session has expired.{" "}
+        <Link href="/login" className="text-accent">
+          Sign in
+        </Link>{" "}
+        again to see active sponsorships.
+      </p>
+    );
+  }
+  if (offers.status === "error") {
+    return (
+      <div className="text-sm" role="alert">
+        <p className="mb-3">{offers.message}</p>
+        {onRetry && (
+          <button className="btn-primary text-sm" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (!offers.sponsoredContentEnabled) {
+    return (
+      <p className="text-sm">
+        Sponsored content is off, so no sponsorships are listed for you. Turn DevAds back on from
+        your{" "}
+        <Link href="/dashboard" className="text-accent">
+          dashboard preferences
+        </Link>{" "}
+        to see them.
+      </p>
+    );
+  }
+  if (offers.offers.length === 0) {
+    return (
+      <>
+        <p className="text-sm mb-2">No sponsorships are active for you right now.</p>
+        <p className="text-sm text-muted">
+          When a sponsor runs an offer you&apos;re eligible for, it&apos;s listed here. Check back
+          later.
+        </p>
+      </>
+    );
+  }
+  return (
+    <>
+      <ul className="space-y-4">
+        {offers.offers.map((offer) => (
+          <OfferCard key={offer.offerId} offer={offer} />
+        ))}
+      </ul>
+      <p className="text-xs text-muted mt-4">
+        This is a list of what&apos;s running, not an offer to complete here. To earn a reward,
+        complete the offer when DevAds shows it to you in a connected tool. DevAds shows at most one
+        at a time, while you&apos;re already waiting, within each sponsor&apos;s limits, so you may not
+        see every listed offer today.
+      </p>
+    </>
+  );
+}
+
 /** Presentational: the developer-facing Sponsorships page body. */
-export function SponsorshipsView({ state, onRetry }: { state: SponsorshipsPageState; onRetry?: () => void }) {
+export function SponsorshipsView({
+  state,
+  offers,
+  onRetry,
+}: {
+  state: SponsorshipsPageState;
+  offers: ActiveSponsorshipsState;
+  onRetry?: () => void;
+}) {
   return (
     <>
       <p className="text-sm text-muted mb-8 max-w-2xl">
@@ -80,13 +195,7 @@ export function SponsorshipsView({ state, onRetry }: { state: SponsorshipsPageSt
           <h2 className="font-medium">Active sponsorships</h2>
           <SponsoredBadge />
         </div>
-        <p className="text-sm mb-2">There&apos;s no list of sponsorships to browse here yet.</p>
-        <p className="text-sm text-muted">
-          DevAds picks at most one sponsored offer for you at the moment you&apos;re already waiting
-          in a connected tool, based on the tool, your settings and each sponsor&apos;s limits. Offers
-          aren&apos;t published as a catalog, so this page can&apos;t show which ones are running right
-          now.
-        </p>
+        <ActiveSponsorshipsList offers={offers} onRetry={onRetry} />
       </section>
 
       <section className="card p-6 mb-6">

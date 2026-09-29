@@ -7,6 +7,7 @@ export const ROUTES = {
   startSession: { method: "POST", path: () => "/api/v1/sessions" },
   endSession: { method: "POST", path: (sessionId: string) => `/api/v1/sessions/${encodeURIComponent(sessionId)}/end` },
   requestOffer: { method: "GET", path: () => "/api/v1/sponsorships/offer" },
+  listOffers: { method: "GET", path: () => "/api/v1/sponsorships/offers" },
   reportEvent: { method: "POST", path: () => "/api/v1/sponsorships/events" },
   wallet: { method: "GET", path: () => "/api/v1/wallet" },
 } as const;

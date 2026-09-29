@@ -360,6 +360,8 @@ Known gaps (not patched in this phase):
   state. A real marketplace needs a side-effect-free endpoint that lists
   the live offers a developer is eligible for, and a decision on whether
   the web is a client that may display and complete offers.
+  *Resolved by the read-only listing below; the web still does not display
+  or complete offers.*
 - **Ledger window.** The wallet returns the 50 most recent ledger rows with
   no pagination. History shows only that window, and the monthly totals
   are marked as possibly incomplete when all 50 rows fall in the current
@@ -368,3 +370,56 @@ Known gaps (not patched in this phase):
   so history rows can't say which sponsorship a reward came from.
 - **No separate sponsorship opt-in.** The page reflects `adsEnabled`, which
   also controls standard ads.
+
+## Read-only offer listing
+
+`GET /api/v1/sponsorships/offers?clientType=...` (plural, session
+required) lists the live sponsored offers the signed-in developer is
+eligible for. It is the browsing counterpart to the selection endpoint
+`GET /api/v1/sponsorships/offer` (singular), which is unchanged and remains
+the only way an offer is served, displayed and made completable.
+
+| | `/sponsorships/offer` (select) | `/sponsorships/offers` (list) |
+| --- | --- | --- |
+| Result | at most one offer, with a `displayEventId` | every eligible offer, no `displayEventId` |
+| Writes | `OFFER_DISPLAYED` event | nothing |
+| Display frequency cap | checked and consumed | not checked, not consumed |
+| Sponsor display stats | counted | untouched |
+| `clientType` | required (or via `sessionId`) | optional filter |
+| Callers | VS Code extension | `apps/web` Sponsorships page |
+
+Response: `{ sponsoredContentEnabled, offers: [{ offerId, campaignId,
+title, description, ctaUrl, requiredAction, rewardType, rewardAmountUnits,
+expiresAt, eligibleClientTypes }] }` (`SponsoredOfferListResponseSchema`,
+composed from the existing offer schema minus `displayEventId`). Sponsor
+charge, budgets and caps are never exposed. When the developer has
+sponsored content off, `offers` is empty and `sponsoredContentEnabled` is
+false.
+
+The route lives in its own file
+(`services/ad-server/src/routes/sponsorshipOffers.ts`) and only reads:
+`loadSponsorshipCandidates`, `loadSponsorshipBudgetUsage` and
+`loadRewardCounts` in `lib/sponsorshipCandidates.ts` are
+`findMany`/`groupBy` queries with no writes, so they are reused as-is. The
+filter is `listEligibleSponsoredOffers` in `@devads/targeting`, built from
+the same predicates as `selectSponsoredOffer` (live, opt-in, category
+opt-out, client type, budget remaining, developer reward caps) with two
+deliberate differences: it ignores the display frequency cap (a listing is
+not a display, and the cap only limits how often an offer is served), and
+it only filters by client type when one is given. As with selection, only
+each campaign's oldest active offer is considered, so the list matches
+what could actually be served. The list is capped at 50 offers.
+
+SDK: `DevAdsClient.listSponsoredOpportunities({ clientType? })`, defaulting
+to the client's configured client type; a client without one lists offers
+for every client type. The VS Code extension does not call it.
+
+Web: the Sponsorships page now loads the preferences and the listing as
+two independent requests (either can fail without hiding the other) and
+renders each offer's reward, required action, expiry and where it can be
+received, flagging offers limited to tools DevAds doesn't support yet. It
+calls the endpoint through `apiGet` with a structural response check, like
+the rewards page, rather than through the SDK (the SDK is built to
+`dist/` and isn't a web dependency). The page doesn't link to the
+sponsor's URL: opening an offer from the web isn't a tracked display and
+can't earn a reward.
