@@ -13,7 +13,14 @@ machine-readable spec: [openapi.yaml](./openapi.yaml).
 | `/api/v1/earnings` | Developer earnings rollup + payout requests |
 | `/api/v1/developers/:id/*` | Preferences, data export, account deletion |
 | `/api/v1/advertisers/signup`, `/api/v1/campaigns/*` | Advertiser account + campaign CRUD |
-| `/api/v1/admin/*` | Campaign approval queue, advertiser suspension, platform overview |
+| `/api/v1/sessions/*` | Development sessions opened and closed by DevAds clients (coarse metadata only) |
+| `/api/v1/sponsorships/*` | Server-selected sponsored offer, read-only offer listing, offer interaction/completion events |
+| `/api/v1/wallet`, `/api/v1/wallet/redemptions` | Developer reward wallet and reward redemption |
+| `/api/v1/sponsorship-campaigns/*` | Sponsor campaign creation, offers and submission |
+| `/api/v1/admin/*` | Ad and sponsorship campaign review, sponsorship activity, redemption settlement, advertiser suspension, platform overview |
+
+Sponsorship and redemption design: [sponsorship-architecture.md](./sponsorship-architecture.md),
+[redemption.md](./redemption.md), [adapters.md](./adapters.md).
 
 ## Design notes
 
@@ -75,6 +82,26 @@ the caller happening to supply the right id in the request:
   advertiser-membership-scoped) and returns a time-limited signed URL for
   the creative's stored file -- creatives aren't sensitive per-advertiser
   data, but the bucket itself is never public.
+- `/api/v1/sessions/*`, `/api/v1/sponsorships/*`: the developer is derived
+  from the session; a session id or display id in the request must belong
+  to that developer. Reward amount and type always come from the campaign,
+  never from the request.
+- `/api/v1/wallet`, `/api/v1/wallet/redemptions`: require the session's user
+  to own the developer profile. Redemption provider, status and balance are
+  server-side; the request carries only reward type, units and an
+  idempotency key.
+- `/api/v1/sponsorship-campaigns/*`: require membership of the campaign's
+  advertiser, exactly like `/api/v1/campaigns/*`.
+- `/api/v1/auth/device/approve`: requires a session, and the device is
+  bound to that session's user (a `userId` in the body is ignored). It
+  previously trusted the body's `userId` without a session, which let
+  anyone approve their own device flow as another user and receive that
+  user's token from `/device/poll`; fixed, with regression tests in
+  `deviceAuth.integration.test.ts`.
+- `/api/v1/auth/signup`: public, but can only create `DEVELOPER` or
+  `ADVERTISER` users. It previously accepted `role: "ADMIN"` and returned an
+  ADMIN session; administrators are `AdminUser` rows that sign in through
+  `/api/v1/auth/admin-login` only.
 - `/api/v1/admin/*`: requires an ADMIN-role session.
 
 Covered by `authGuard.integration.test.ts` (401 with no token, 403 for a
@@ -87,12 +114,16 @@ owner) plus dedicated cases in `ads.integration.test.ts`.
 Every route has a default limit of 300 requests/minute per IP
 (`@fastify/rate-limit`, global). Auth endpoints that are natural
 brute-force targets (`/auth/login`, `/auth/admin-login`, `/auth/signup`,
-`/advertisers/signup`) have a much stricter 10/minute per-route limit.
-Exceeding a limit returns `429`. Covered by `rateLimit.integration.test.ts`.
+`/advertisers/signup`) have a much stricter 10/minute per-route limit, and
+reward redemption (`POST /api/v1/wallet/redemptions`) is limited to
+20/minute. Exceeding a limit returns `429`. Covered by
+`rateLimit.integration.test.ts` and `redemptions.integration.test.ts`.
 
 **Known remaining gap:** there's no CSRF protection layer (acceptable for
 a bearer-token API consumed by native/SPA clients that don't rely on
 cookies for auth, but worth an explicit look before handling real payment
-flows). CORS is currently wide open (`origin: true`) for local multi-port
-dev convenience and must be locked down to known origins before a real
-deployment.
+flows).
+
+**CORS** is restricted to an allowlist: the three local dashboard origins by
+default, or the comma-separated `CORS_ALLOWED_ORIGINS` in a real deployment
+(`services/ad-server/src/app.ts`). It never reflects arbitrary origins.

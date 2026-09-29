@@ -3,7 +3,7 @@ export default function AdvertisePage() {
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-24">
-      <h1 className="text-4xl font-semibold tracking-tight mb-6">Reach developers while they're already waiting.</h1>
+      <h1 className="text-4xl font-semibold tracking-tight mb-6">Reach developers while they&apos;re already waiting.</h1>
       <p className="text-muted mb-8 max-w-xl">
         DevAds places a single, tasteful sponsored card during a build, install, or test run &mdash;
         never adding time to the wait. Target by language, framework, runtime, platform, and country.

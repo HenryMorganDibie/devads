@@ -10,6 +10,7 @@ import {
   verifyPassword,
 } from "@devads/auth";
 import { config } from "../lib/config.js";
+import { requireSession } from "../lib/authGuard.js";
 
 const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-only-session-secret-change-me-please-32chars";
 const DEVICE_CODE_TTL_SECONDS = Number(process.env.DEVICE_AUTH_CODE_TTL_SECONDS ?? 600);
@@ -23,9 +24,11 @@ const DeviceAuthPollBody = z.object({
   deviceCode: z.string().min(1),
 });
 
+// `userId` is still accepted so older web builds keep working, but it is
+// ignored: the approving user is always the signed-in session's user.
 const DeviceAuthApproveBody = z.object({
   userCode: z.string().min(1),
-  userId: z.string().min(1),
+  userId: z.string().min(1).optional(),
 });
 
 /**
@@ -146,8 +149,11 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   // Called by the web app (after the developer signs in and enters the user
-  // code shown in VS Code) to approve a pending device request.
-  app.post("/api/v1/auth/device/approve", async (req, reply) => {
+  // code shown in VS Code) to approve a pending device request. Requires a
+  // session and binds the device to that session's user: trusting a userId
+  // from the body would let anyone who starts a device flow approve it as
+  // any other user and receive their session token from /device/poll.
+  app.post("/api/v1/auth/device/approve", { preHandler: requireSession }, async (req, reply) => {
     const parsed = DeviceAuthApproveBody.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: "invalid_request" });
 
@@ -158,7 +164,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     await prisma.deviceAuthRequest.update({
       where: { id: request.id },
-      data: { status: "APPROVED", userId: parsed.data.userId, approvedAt: new Date() },
+      data: { status: "APPROVED", userId: req.session!.sub, approvedAt: new Date() },
     });
 
     return reply.send({ ok: true });

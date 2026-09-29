@@ -109,10 +109,18 @@ export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>;
 // Auth
 // ---------------------------------------------------------------------------
 
+/**
+ * Roles a person may choose at public signup. ADMIN is deliberately absent:
+ * administrators are AdminUser rows provisioned out of band and signed in
+ * through /api/v1/auth/admin-login. Allowing it here would let anyone mint
+ * an ADMIN session with one unauthenticated request.
+ */
+export const PublicSignupRoleSchema = z.enum(["DEVELOPER", "ADVERTISER"]);
+
 export const SignupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(200),
-  role: UserRoleSchema.default("DEVELOPER"),
+  role: PublicSignupRoleSchema.default("DEVELOPER"),
 });
 export type SignupInput = z.infer<typeof SignupSchema>;
 

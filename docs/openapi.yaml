@@ -4,20 +4,25 @@ info:
   version: 0.1.0
   description: >
     Server-authoritative API for ad selection, event tracking, earnings,
-    campaign management, and admin operations. See api.md for design notes
-    and the current authorization scope.
+    campaign management, developer sponsorships (sessions, sponsored offers,
+    rewards, wallet, redemption), and admin operations. See api.md for
+    design notes and the current authorization scope. Request and response
+    shapes for the sponsorship routes are the Zod DTOs in
+    packages/shared/src/sponsorship.ts; errors are { error: <reason> }.
 servers:
   - url: http://localhost:4000
 paths:
   /health:
     get:
       summary: Health check
+      security: []
       responses:
         "200": { description: OK }
 
   /api/v1/auth/signup:
     post:
       summary: Developer or advertiser account signup
+      security: []
       requestBody:
         required: true
         content:
@@ -28,7 +33,7 @@ paths:
               properties:
                 email: { type: string, format: email }
                 password: { type: string, minLength: 8 }
-                role: { type: string, enum: [DEVELOPER, ADVERTISER, ADMIN], default: DEVELOPER }
+                role: { type: string, enum: [DEVELOPER, ADVERTISER], default: DEVELOPER, description: ADMIN cannot be chosen; administrators sign in via admin-login }
       responses:
         "200":
           description: Session created
@@ -45,6 +50,7 @@ paths:
   /api/v1/auth/login:
     post:
       summary: Login (developer or advertiser)
+      security: []
       requestBody:
         required: true
         content:
@@ -62,6 +68,7 @@ paths:
   /api/v1/auth/admin-login:
     post:
       summary: Admin login
+      security: []
       responses:
         "200": { description: Admin session token }
         "401": { description: Invalid credentials }
@@ -69,30 +76,38 @@ paths:
   /api/v1/auth/device/start:
     post:
       summary: Start a VS Code device-pairing sign-in flow
+      security: []
       responses:
-        "200": { description: deviceCode, userCode, verificationUrl, expiry, poll interval }
+        "200": { description: "deviceCode, userCode, verificationUrl, expiry, poll interval" }
 
   /api/v1/auth/device/poll:
     post:
       summary: Poll for device-pairing approval
+      security: []
       responses:
         "200": { description: "status: pending | approved | expired, token + developerId when approved" }
 
   /api/v1/auth/device/approve:
     post:
-      summary: Approve a pending device code (called by the web app after the developer signs in)
+      summary: Approve a pending device code for the signed-in user (called by the web app)
+      description: >
+        The device is always bound to the session's user; a userId in the
+        body is accepted for compatibility and ignored.
+      security: [{ bearerAuth: [] }]
       responses:
         "200": { description: OK }
-        "400": { description: Invalid or expired code }
+        "400": { description: invalid_or_expired_code }
+        "401": { description: No session }
 
   /api/v1/ads/select:
     post:
       summary: Server-authoritative ad selection for the current context
+      security: [{ bearerAuth: [] }]
       description: >
         Re-validates eligibility server-side regardless of client state.
         Creates the impression + IMPRESSION event itself when a candidate
-        wins. Never requires authentication (called by an unauthenticated
-        extension flow using a stored developerId) -- see api.md.
+        wins. Requires a developer session; the developer is derived from
+        the session, never from the request body -- see api.md.
       requestBody:
         required: true
         content:
@@ -139,6 +154,7 @@ paths:
   /api/v1/events:
     post:
       summary: Report a CLICK, DISMISS, or VIEW_COMPLETE event (idempotent via eventId)
+      security: [{ bearerAuth: [] }]
       description: >
         IMPRESSION events cannot be reported here -- only created
         server-side by /api/v1/ads/select. A qualifying VIEW_COMPLETE
@@ -173,7 +189,7 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Today/week/month/lifetime earnings, impressions, clicks, payout history }
+        "200": { description: "Today/week/month/lifetime earnings, impressions, clicks, payout history" }
         "401": { description: Missing/invalid session }
         "403": { description: Signed in as someone other than this developer }
 
@@ -193,23 +209,28 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses:
-        "200": { description: adsEnabled, frequencyCapOverride, preferredCategories, payoutThresholdCents, currency }
+        "200": { description: "adsEnabled, frequencyCapOverride, preferredCategories, payoutThresholdCents, currency" }
     patch:
       summary: Update developer preferences, incl. the disable-ads switch (requires session, owner only)
       security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses:
         "200": { description: Updated preferences }
 
   /api/v1/developers/{id}/export:
     get:
       summary: Export all data held for a developer (requires session, owner only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: Full developer profile incl. earnings ledger, payouts, impressions, events }
+        "200": { description: "Full developer profile incl. earnings ledger, payouts, impressions, events" }
 
   /api/v1/developers/{id}:
     delete:
       summary: Delete a developer account and all associated data (requires session, owner only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: OK -- cascades to all owned records }
@@ -217,16 +238,19 @@ paths:
   /api/v1/advertisers/signup:
     post:
       summary: Create an advertiser account (company + billing account)
+      security: []
       responses:
-        "200": { description: userId, advertiserId }
+        "200": { description: "userId, advertiserId" }
 
   /api/v1/campaigns:
     post:
       summary: Create a Draft campaign
+      security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Created campaign }
     get:
       summary: List an advertiser's campaigns with live stats
+      security: [{ bearerAuth: [] }]
       parameters:
         - name: advertiserId
           in: query
@@ -238,12 +262,46 @@ paths:
   /api/v1/campaigns/{id}/creatives:
     post:
       summary: Add a creative to a Draft campaign
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Created creative }
+
+  /api/v1/campaigns/{id}/upload:
+    post:
+      summary: Upload an image or video file for a Draft campaign's creative (requires session, advertiser member)
+      description: >
+        multipart/form-data with one file. Validated server-side by detected
+        MIME type and size (PNG/JPEG/WebP/GIF up to 5MB, MP4/WebM up to
+        25MB); the client's declared type is never trusted.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: kind, in: query, required: false, schema: { type: string, enum: [IMAGE, VIDEO], default: IMAGE } }
+      responses:
+        "200": { description: "{ key, mimeType, sizeBytes }" }
+        "400": { description: "no_file_uploaded, or an unsupported type / oversized file" }
+        "403": { description: Not a member of the campaign's advertiser }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_editable (not DRAFT) }
+
+  /api/v1/creatives/{id}/url:
+    get:
+      summary: Time-limited signed URL for a creative's stored file (requires any session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ url }" }
+        "404": { description: creative_not_found or no_uploaded_file }
 
   /api/v1/campaigns/{id}/submit:
     post:
       summary: Submit a Draft campaign (with at least one creative) for admin review
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Campaign now SUBMITTED }
         "400": { description: Missing creative }
@@ -259,6 +317,8 @@ paths:
   /api/v1/admin/campaigns/{id}/approve:
     post:
       summary: Approve a Submitted campaign (requires ADMIN session)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Campaign now APPROVED }
@@ -266,6 +326,8 @@ paths:
   /api/v1/admin/campaigns/{id}/reject:
     post:
       summary: Reject a Submitted campaign with a reason (requires ADMIN session)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Campaign now REJECTED }
@@ -273,6 +335,8 @@ paths:
   /api/v1/admin/campaigns/{id}/pause:
     post:
       summary: Pause an Approved campaign (requires ADMIN session)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Campaign now PAUSED }
@@ -280,6 +344,8 @@ paths:
   /api/v1/admin/advertisers/{id}/suspend:
     post:
       summary: Suspend an advertiser account (requires ADMIN session)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Advertiser now SUSPENDED }
@@ -289,7 +355,345 @@ paths:
       summary: Platform analytics (requires ADMIN session)
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: Developers, advertisers, impressions, spend, developer payout liability, platform revenue, pending approvals, open fraud flags }
+        "200": { description: "Developers, advertisers, impressions, spend, developer payout liability, platform revenue, pending approvals, open fraud flags" }
+
+  # --- Developer sponsorship: sessions, offers, events, wallet ---------------
+
+  /api/v1/sessions:
+    post:
+      summary: Start a development session for the signed-in developer (coarse metadata only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientType]
+              properties:
+                clientType: { $ref: "#/components/schemas/DevClientType" }
+                clientVersion: { type: string, maxLength: 32 }
+                activityCategory: { type: string, description: Short coarse slug such as "testing" }
+      responses:
+        "200": { description: DevelopmentSessionDTO }
+        "400": { description: invalid_request }
+        "404": { description: developer_not_found }
+
+  /api/v1/sessions/{id}/end:
+    post:
+      summary: End a development session (idempotent; owner only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: DevelopmentSessionDTO (unchanged if already ENDED) }
+        "403": { description: forbidden (not the owner's session) }
+        "404": { description: session_not_found }
+
+  /api/v1/sponsorships/offer:
+    get:
+      summary: Ask for a sponsored offer now; a returned offer is recorded server-side as OFFER_DISPLAYED
+      description: >
+        Server-authoritative selection over approved sponsorship campaigns,
+        honouring the developer's opt-in, client eligibility, frequency caps,
+        per-developer reward caps and budgets. The client never chooses the
+        offer or the reward.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: sessionId, in: query, required: false, schema: { type: string } }
+        - { name: clientType, in: query, required: false, schema: { $ref: "#/components/schemas/DevClientType" } }
+      responses:
+        "200": { description: "{ offer: SponsoredOfferCandidate | null }" }
+        "400": { description: invalid_request or client_type_required (neither sessionId nor clientType) }
+        "403": { description: forbidden (session belongs to someone else) }
+        "404": { description: developer_not_found }
+        "409": { description: session_ended }
+
+  /api/v1/sponsorships/offers:
+    get:
+      summary: List live offers the developer is eligible for (read-only; records nothing, no displayEventId)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: clientType, in: query, required: false, schema: { $ref: "#/components/schemas/DevClientType" } }
+      responses:
+        "200": { description: "SponsoredOfferListResponse: { sponsoredContentEnabled, offers }" }
+        "400": { description: invalid_request }
+        "404": { description: developer_not_found }
+
+  /api/v1/sponsorships/events:
+    post:
+      summary: Report a sponsored-offer interaction or completion (idempotent via eventId)
+      description: >
+        OFFER_DISPLAYED cannot be reported; the server records it. An
+        OFFER_COMPLETED for a live offer charges the sponsor and writes one
+        EARNED reward ledger entry, at most once per display. Reward amount
+        and type always come from the campaign, never the request.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId, type, displayEventId]
+              properties:
+                eventId: { type: string, maxLength: 128 }
+                type: { type: string, enum: [OFFER_SKIPPED, OFFER_OPENED, OFFER_INTERACTED, OFFER_COMPLETED] }
+                displayEventId: { type: string, maxLength: 128 }
+                sessionId: { type: string }
+      responses:
+        "200": { description: "{ ok, rewarded?, reward?: { rewardType, amountUnits, status } } or { ok: true, idempotent: true }" }
+        "400": { description: "invalid_request, display_mismatch or session_mismatch" }
+        "404": { description: developer_not_found }
+        "409": { description: "Completion refused: campaign_not_active, campaign_not_started, campaign_ended, offer_inactive, offer_expired, developer_daily_cap_reached, developer_lifetime_cap_reached" }
+
+  /api/v1/wallet:
+    get:
+      summary: Reward balances per reward type and the 50 most recent ledger entries (owner only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: developerId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "RewardWalletResponse: cached balance alongside the ledger-derived balance per reward type" }
+        "403": { description: forbidden }
+        "404": { description: developer_not_found }
+
+  /api/v1/wallet/redemptions:
+    get:
+      summary: The developer's recent redemptions and whether redemption is enabled (owner only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: developerId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ redemptionEnabled, redeemableRewardTypes, redemptions } (latest 50)" }
+        "403": { description: forbidden }
+        "404": { description: developer_not_found }
+    post:
+      summary: Redeem wallet units (owner only; idempotent on idempotencyKey; 20 requests/minute)
+      description: >
+        The server recomputes the balance from the ledger, writes the
+        redemption and its REDEEMED debit atomically, then calls the
+        configured provider. A failed provider returns the units via a
+        compensating ADJUSTMENT credit. See redemption.md.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [developerId, rewardType, amountUnits, idempotencyKey]
+              properties:
+                developerId: { type: string }
+                rewardType: { $ref: "#/components/schemas/RewardType" }
+                amountUnits: { type: integer, minimum: 1 }
+                idempotencyKey: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "201": { description: "{ redemption, idempotent: false } with status COMPLETED, PENDING, PROCESSING or FAILED" }
+        "200": { description: "{ redemption, idempotent: true } (replayed idempotency key; nothing debited)" }
+        "400": { description: "invalid_request, insufficient_balance (with availableUnits) or reward_type_not_redeemable" }
+        "403": { description: forbidden }
+        "404": { description: developer_not_found }
+        "409": { description: "idempotency_key_reused, wallet_reconciliation_required or redemption_in_progress" }
+        "429": { description: Rate limited }
+        "503": { description: redemption_disabled (no REDEMPTION_PROVIDER configured) }
+
+  # --- Sponsor campaign management ------------------------------------------
+
+  /api/v1/sponsorship-campaigns:
+    post:
+      summary: Create a DRAFT sponsorship campaign (requires session, advertiser member)
+      description: >
+        Sponsor category, objective and reward type are independent fields;
+        none is required to be developer-tool or AI specific. The sponsor
+        charge (sponsorChargeCents) and the developer reward
+        (rewardAmountUnits) are separate economic quantities.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: SponsorshipCampaignDTO }
+        "400": { description: invalid_request }
+        "403": { description: forbidden or advertiser_suspended }
+        "404": { description: advertiser_not_found }
+    get:
+      summary: List an advertiser's sponsorship campaigns with stats (requires session, advertiser member)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: advertiserId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Campaigns with offers and engagement/reward/spend stats }
+        "403": { description: forbidden }
+
+  /api/v1/sponsorship-campaigns/{id}:
+    patch:
+      summary: Edit a DRAFT sponsorship campaign (requires session, advertiser member)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: SponsorshipCampaignDTO }
+        "400": { description: invalid_request or invalid_date_range }
+        "403": { description: forbidden }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_editable (not DRAFT) }
+
+  /api/v1/sponsorship-campaigns/{id}/offers:
+    post:
+      summary: Add a sponsored offer to a DRAFT campaign (requires session, advertiser member)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: SponsorshipCampaignDTO including offers }
+        "400": { description: invalid_request }
+        "403": { description: forbidden }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_editable }
+
+  /api/v1/sponsorship-campaigns/{id}/submit:
+    post:
+      summary: Submit a DRAFT campaign with at least one offer for admin review
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Campaign now SUBMITTED }
+        "400": { description: campaign_needs_at_least_one_offer }
+        "403": { description: forbidden }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_in_draft }
+
+  # --- Admin: sponsorship review, activity and redemptions ------------------
+
+  /api/v1/admin/sponsorship-campaigns:
+    get:
+      summary: All sponsorship campaigns with stats, optionally by status (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [DRAFT, SUBMITTED, APPROVED, REJECTED, PAUSED, ARCHIVED] } }
+      responses:
+        "200": { description: Campaigns with stats }
+        "403": { description: Not an admin }
+
+  /api/v1/admin/sponsorship-campaigns/{id}/approve:
+    post:
+      summary: Approve a SUBMITTED sponsorship campaign (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Campaign now APPROVED }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_submitted }
+
+  /api/v1/admin/sponsorship-campaigns/{id}/reject:
+    post:
+      summary: Reject a SUBMITTED sponsorship campaign with a reason (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { description: Campaign now REJECTED }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_submitted }
+
+  /api/v1/admin/sponsorship-campaigns/{id}/pause:
+    post:
+      summary: Pause an APPROVED sponsorship campaign (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Campaign now PAUSED }
+        "404": { description: campaign_not_found }
+        "409": { description: campaign_not_approved }
+
+  /api/v1/admin/sponsorship-campaigns/{id}/events:
+    get:
+      summary: Sponsorship events for one campaign, newest first, keyset-paged (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+        - { name: developerId, in: query, required: false, schema: { type: string } }
+        - { name: type, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: "{ items, nextCursor } (no metadata or free text)" }
+        "400": { description: invalid_request or invalid_cursor }
+        "404": { description: campaign_not_found }
+
+  /api/v1/admin/sponsorship-campaigns/{id}/rewards:
+    get:
+      summary: Reward ledger entries for one campaign, newest first, keyset-paged (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+        - { name: developerId, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: "{ items, nextCursor }" }
+        "400": { description: invalid_request or invalid_cursor }
+        "404": { description: campaign_not_found }
+
+  /api/v1/admin/redemptions:
+    get:
+      summary: Redemption queue, oldest first, up to 200 (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED] } }
+      responses:
+        "200": { description: "{ redemptions } including developerId" }
+        "403": { description: Not an admin }
+
+  /api/v1/admin/redemptions/{id}/complete:
+    post:
+      summary: Mark an open redemption delivered (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providerRef: { type: string, maxLength: 200, description: "Internal fulfilment reference, never the reward code itself" }
+      responses:
+        "200": { description: "{ redemption }" }
+        "404": { description: redemption_not_found }
+        "409": { description: redemption_not_open (already COMPLETED or FAILED) }
+
+  /api/v1/admin/redemptions/{id}/fail:
+    post:
+      summary: Fail an open redemption and return its units to the developer (requires ADMIN session)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200": { description: "{ redemption } with status FAILED; a compensating ADJUSTMENT credit was written" }
+        "400": { description: invalid_request (missing reason) }
+        "404": { description: redemption_not_found }
+        "409": { description: redemption_not_open }
 
 components:
   securitySchemes:
@@ -297,3 +701,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    DevClientType:
+      type: string
+      description: >
+        A label for the client a developer is using. Listing a value is not a
+        claim of integration; only VS_CODE has a DevAds adapter (see adapters.md).
+      enum: [VS_CODE, CLAUDE_CODE, CODEX, GEMINI, CURSOR, OPENCODE, AIDER, CUSTOM_AGENT, LOCAL_AGENT, OTHER]
+    RewardType:
+      type: string
+      enum: [AI_CREDITS, API_CREDITS, COMPUTE_CREDITS, TOOL_CREDITS, CASH, DISCOUNT, SUBSCRIPTION_CREDIT, OTHER]

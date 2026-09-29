@@ -33,4 +33,10 @@ describe("schemas", () => {
     const result = SignupSchema.safeParse({ email: "a@b.com", password: "short" });
     expect(result.success).toBe(false);
   });
+
+  it("never lets public signup choose the ADMIN role", () => {
+    expect(SignupSchema.safeParse({ email: "a@b.com", password: "longenough", role: "ADMIN" }).success).toBe(false);
+    expect(SignupSchema.parse({ email: "a@b.com", password: "longenough" }).role).toBe("DEVELOPER");
+    expect(SignupSchema.parse({ email: "a@b.com", password: "longenough", role: "ADVERTISER" }).role).toBe("ADVERTISER");
+  });
 });
