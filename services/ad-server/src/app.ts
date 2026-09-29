@@ -11,6 +11,7 @@ import { registerDeveloperRoutes } from "./routes/developers.js";
 import { registerSponsorshipRoutes } from "./routes/sponsorships.js";
 import { registerSponsorshipCampaignRoutes } from "./routes/sponsorshipCampaigns.js";
 import { registerSponsorshipOfferListingRoutes } from "./routes/sponsorshipOffers.js";
+import { registerSponsorshipAdminActivityRoutes } from "./routes/sponsorshipAdminActivity.js";
 import { attachSession } from "./lib/authGuard.js";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // matches storage.ts's video cap; images are checked again after upload
@@ -51,6 +52,7 @@ export async function buildApp() {
   await registerSponsorshipRoutes(app);
   await registerSponsorshipCampaignRoutes(app);
   await registerSponsorshipOfferListingRoutes(app);
+  await registerSponsorshipAdminActivityRoutes(app);
 
   return app;
 }

@@ -6,10 +6,12 @@ import {
   SponsoredOfferInputSchema,
   SponsorshipCampaignStatusSchema,
   UpdateSponsorshipCampaignSchema,
+  type AdminSponsorshipCampaignDTO,
   type SponsorshipCampaignDTO,
 } from "@devads/shared";
 import { requireAdmin, requireSession } from "../lib/authGuard.js";
 import { isAdvertiserMember } from "../lib/advertiserMembership.js";
+import { loadSponsorshipCampaignStats } from "../lib/sponsorshipCampaignStats.js";
 
 const IdParams = z.object({ id: z.string().min(1) });
 const RejectBody = z.object({ reason: z.string().min(1).max(500) });
@@ -188,29 +190,31 @@ export async function registerSponsorshipCampaignRoutes(app: FastifyInstance) {
     });
 
     const withStats = await Promise.all(
-      campaigns.map(async (c) => {
-        const [displays, completions, rewardsGranted, spend] = await Promise.all([
-          prisma.sponsorshipEvent.count({ where: { campaignId: c.id, type: "OFFER_DISPLAYED" } }),
-          prisma.sponsorshipEvent.count({ where: { campaignId: c.id, type: "OFFER_COMPLETED" } }),
-          prisma.developerRewardLedger.count({ where: { campaignId: c.id, entryType: "EARNED" } }),
-          prisma.sponsorshipCampaignSpend.aggregate({ where: { campaignId: c.id }, _sum: { amountCents: true } }),
-        ]);
-        return toCampaignDTO(c, { displays, completions, rewardsGranted, spendCents: spend._sum.amountCents ?? 0 });
-      })
+      campaigns.map(async (c) => toCampaignDTO(c, await loadSponsorshipCampaignStats(c.id)))
     );
     return reply.send(withStats);
   });
 
   // --- Admin approval queue --------------------------------------------------
+  /**
+   * Every field of the sponsor DTO, plus (additively) the advertiser's name
+   * and the same whole-campaign stats the sponsor list computes. Read-only.
+   */
   app.get("/api/v1/admin/sponsorship-campaigns", { preHandler: requireAdmin }, async (req, reply) => {
     const query = z.object({ status: SponsorshipCampaignStatusSchema.optional() }).safeParse(req.query);
     if (!query.success) return reply.status(400).send({ error: "invalid_request" });
     const campaigns = await prisma.sponsorshipCampaign.findMany({
       where: query.data.status ? { status: query.data.status } : undefined,
-      include: { offers: true },
+      include: { offers: true, advertiser: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     });
-    return reply.send(campaigns.map((c) => toCampaignDTO(c)));
+    const enriched: AdminSponsorshipCampaignDTO[] = await Promise.all(
+      campaigns.map(async (c) => {
+        const stats = await loadSponsorshipCampaignStats(c.id);
+        return { ...toCampaignDTO(c, stats), stats, advertiserName: c.advertiser.name };
+      })
+    );
+    return reply.send(enriched);
   });
 
   app.post("/api/v1/admin/sponsorship-campaigns/:id/approve", { preHandler: requireAdmin }, async (req, reply) => {

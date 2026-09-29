@@ -511,10 +511,10 @@ What sponsors and admins can do today vs. what is gapped:
 | Sponsor: per-day spend, daily budget usage, per-offer stats, time series | **Gap.** Stats are whole-campaign totals only |
 | Admin: SUBMITTED queue, approve, reject, pause | Available |
 | Admin: resume a paused campaign, archive | **Gap.** No route |
-| Admin: advertiser name on a sponsorship campaign | **Gap.** The admin DTO has only `advertiserId` |
-| Admin: campaign stats (displays, completions, spend) | **Gap.** Only the sponsor list route computes `stats`; the admin list doesn't |
-| Admin: inspect `SponsorshipEvent` rows (displays, skips, opens, completions per developer/offer) | **Gap.** No admin read route |
-| Admin: inspect `DeveloperRewardLedger` rows (rewards granted per developer/campaign) | **Gap.** No admin read route |
+| Admin: advertiser name on a sponsorship campaign | ~~**Gap.** The admin DTO has only `advertiserId`~~ Available: `advertiserName` on the admin list (see below) |
+| Admin: campaign stats (displays, completions, spend) | ~~**Gap.** Only the sponsor list route computes `stats`; the admin list doesn't~~ Available: same `stats` on the admin list |
+| Admin: inspect `SponsorshipEvent` rows (displays, skips, opens, completions per developer/offer) | ~~**Gap.** No admin read route~~ Available: `GET /api/v1/admin/sponsorship-campaigns/:id/events` |
+| Admin: inspect `DeveloperRewardLedger` rows (rewards granted per developer/campaign) | ~~**Gap.** No admin read route~~ Available: `GET /api/v1/admin/sponsorship-campaigns/:id/rewards` |
 
 Known gaps (not patched in this phase):
 
@@ -529,11 +529,97 @@ Known gaps (not patched in this phase):
   beyond what the server already stores). It would be a pure read like the
   offer listing: no writes, no cap or spend changes. The admin page states
   that this isn't available instead of showing anything partial.
+  *Resolved by the admin sponsorship activity routes below.*
 - **Admin campaign stats and advertiser name.** Adding the sponsor list's
   `stats` block and the advertiser's name to the admin list response (read
   only) would let reviewers see spend and who the sponsor is.
+  *Resolved: the admin list now carries both, additively (see below).*
 - **Sponsor lifecycle.** Offer edit/deactivate, sponsor-side
   withdraw/archive/pause and admin resume/archive are all mutations and need
   routes before any UI can offer them.
 - **Reporting.** No per-day or per-offer breakdown and no daily budget
   usage is exposed, so the dashboards only show campaign totals.
+
+## Admin sponsorship activity (read-only)
+
+Closes the Phase 5 admin gaps. Three read-only, `requireAdmin` routes let a
+DevAds admin see who sponsors a campaign, how it is performing and, for
+fraud and abuse review, exactly which developers displayed, completed and
+were rewarded for it. No write route, Prisma model or migration was added:
+every table read here has existed since Phase 1.
+
+| Route | Returns | File |
+| --- | --- | --- |
+| `GET /api/v1/admin/sponsorship-campaigns?status=` | the existing campaign DTOs, each with `advertiserName` and `stats` added | `routes/sponsorshipCampaigns.ts` |
+| `GET /api/v1/admin/sponsorship-campaigns/:id/events?limit=&cursor=&developerId=&type=` | `{ items: [{ eventId, type, offerId, developerId, sessionId, displayEventId, createdAt }], nextCursor }` | `routes/sponsorshipAdminActivity.ts` |
+| `GET /api/v1/admin/sponsorship-campaigns/:id/rewards?limit=&cursor=&developerId=` | `{ items: [{ id, developerId, rewardType, campaignId, sponsorshipEventId, entryType, amountUnits, status, createdAt }], nextCursor }` | `routes/sponsorshipAdminActivity.ts` |
+
+**Enriched list, additive only.** Every field the admin list returned before
+is still there with the same value; `advertiserName` (joined from
+`Advertiser.name`) and `stats { displays, completions, rewardsGranted,
+spendCents }` are added. The stats come from
+`lib/sponsorshipCampaignStats.ts`, which holds the exact four queries the
+sponsor list route has used since Phase 1, moved out unchanged so both
+routes share one implementation. The sponsor route's response is unchanged
+(it does not gain `advertiserName`). Shared schema:
+`AdminSponsorshipCampaignDTOSchema`, which is `SponsorshipCampaignDTOSchema`
+extended with the two fields, so the old schema still parses the new
+response.
+
+**Activity rows.** Events and ledger rows are scoped by their `campaignId`
+column, the same column the stats count, so one campaign's view never shows
+another campaign's rows. Events carry the correlation needed to spot replay
+and abuse: each completion's `displayEventId` is the server-recorded
+`OFFER_DISPLAYED` it claims, and an EARNED ledger row's `sponsorshipEventId`
+is the display it paid for. Optional `developerId` (both routes) and `type`
+(events) filters narrow a page to, say, one developer's completions. The
+DTOs are explicit selects: event `metadata` and the ledger `description`
+are never read or returned, and developers appear only by the id the admin
+UI already uses; no profile, user, email or session detail beyond the
+session id. Shared schemas: `AdminSponsorshipEventDTOSchema`,
+`AdminRewardLedgerEntryDTOSchema` (the wallet's `RewardLedgerEntryDTOSchema`
+plus `developerId` and `sponsorshipEventId`) and their page schemas.
+
+**Pagination scheme.** No admin route had pagination before, so this is the
+first: keyset (cursor) paging, newest first, ordered by `(createdAt desc,
+id desc)`. `limit` defaults to 50 and is capped at 200
+(`AdminActivityPageQuerySchema`). A response's `nextCursor` is an opaque
+string naming the last row of the page (null on the last page); pass it
+back as `cursor` for the next page. Unlike offset paging, pages stay stable
+while new events keep arriving, and rows sharing a timestamp are still
+ordered by id so none is skipped or repeated. A malformed cursor is a 400
+`invalid_cursor`; an unknown campaign is a 404 `campaign_not_found`;
+anything but an admin session is a 403, like every other admin route.
+
+**Admin UI.** The admin Sponsorships page shows the advertiser name next to
+the id and the stats on every campaign, and each campaign has an
+**Activity** button that opens two read-only tables in place of the old
+"not available" note: sponsorship events (time to the second in UTC, event
+type, developer, session, event id, the display it refers to, offer) and
+the developer reward ledger (time, developer, entry type, amount, status,
+the display it paid for), each with Newer/Older paging, 50 rows a page.
+
+Tests: `services/ad-server/src/__tests__/sponsorshipAdminActivity.integration.test.ts`
+(real Postgres: 403 for developer, advertiser and anonymous callers,
+paging at several page sizes with timestamp ties, per-campaign scoping,
+filters, no metadata/description in responses, enriched stats equal to
+the sponsor route's, additive-contract checks against the old schema, a
+read-only snapshot check, and an end-to-end display/completion/reward
+trace), plus shared schema and `apps/admin-dashboard` tests.
+
+Not done here:
+
+- **The admin list is still unpaginated** and computes stats with four
+  queries per campaign, the same as the sponsor list. Fine at current
+  volumes; a batched `groupBy` and list paging are the next step if the
+  number of campaigns grows.
+- **Ledger index.** `developer_reward_ledger` has no index leading with
+  `campaignId` (its indexes lead with `developerId`), so the rewards route
+  filters on campaign without an ideal index. Adding one needs a migration,
+  which this change deliberately doesn't include.
+- **No cross-campaign view.** There is no `GET /api/v1/admin/sponsorship-activity`
+  across all campaigns or per developer; review is per campaign.
+- **No automated fraud detection.** These routes let a person inspect
+  activity; `services/fraud` is still a stub, and there is no reversal route,
+  so an admin who finds abuse can pause the campaign but cannot reverse a
+  reward.

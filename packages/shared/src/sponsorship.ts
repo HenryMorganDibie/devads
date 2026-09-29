@@ -278,6 +278,15 @@ export const SponsoredOfferDTOSchema = z.object({
 });
 export type SponsoredOfferDTO = z.infer<typeof SponsoredOfferDTOSchema>;
 
+/** Whole-campaign totals (sponsor list route since Phase 1; admin list route too). */
+export const SponsorshipCampaignStatsSchema = z.object({
+  displays: z.number().int(),
+  completions: z.number().int(),
+  rewardsGranted: z.number().int(),
+  spendCents: z.number().int(),
+});
+export type SponsorshipCampaignStatsDTO = z.infer<typeof SponsorshipCampaignStatsSchema>;
+
 export const SponsorshipCampaignDTOSchema = z.object({
   id: z.string(),
   advertiserId: z.string(),
@@ -302,13 +311,76 @@ export const SponsorshipCampaignDTOSchema = z.object({
   approvedAt: z.string().nullable(),
   createdAt: z.string(),
   offers: z.array(SponsoredOfferDTOSchema),
-  stats: z
-    .object({
-      displays: z.number().int(),
-      completions: z.number().int(),
-      rewardsGranted: z.number().int(),
-      spendCents: z.number().int(),
-    })
-    .optional(),
+  stats: SponsorshipCampaignStatsSchema.optional(),
 });
 export type SponsorshipCampaignDTO = z.infer<typeof SponsorshipCampaignDTOSchema>;
+
+// ---------------------------------------------------------------------------
+// Admin read-only sponsorship activity (fraud / abuse review)
+//
+// GET /api/v1/admin/sponsorship-campaigns            (list, enriched)
+// GET /api/v1/admin/sponsorship-campaigns/:id/events  (SponsorshipEvent rows)
+// GET /api/v1/admin/sponsorship-campaigns/:id/rewards (DeveloperRewardLedger rows)
+//
+// All requireAdmin and read-only. Row DTOs carry ids, enums, amounts and
+// timestamps only: never event metadata, ledger descriptions, or any
+// developer profile/user data beyond the developer id.
+// ---------------------------------------------------------------------------
+
+/** The existing campaign DTO plus the advertiser's name and (always present) stats. Purely additive. */
+export const AdminSponsorshipCampaignDTOSchema = SponsorshipCampaignDTOSchema.extend({
+  advertiserName: z.string(),
+  stats: SponsorshipCampaignStatsSchema,
+});
+export type AdminSponsorshipCampaignDTO = z.infer<typeof AdminSponsorshipCampaignDTOSchema>;
+
+export const ADMIN_ACTIVITY_DEFAULT_LIMIT = 50;
+export const ADMIN_ACTIVITY_MAX_LIMIT = 200;
+
+/**
+ * Keyset pagination: rows are ordered newest first (createdAt desc, id desc).
+ * `cursor` is the opaque `nextCursor` of the previous page; absent = first page.
+ */
+export const AdminActivityPageQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(ADMIN_ACTIVITY_MAX_LIMIT).default(ADMIN_ACTIVITY_DEFAULT_LIMIT),
+  cursor: z.string().min(1).max(256).optional(),
+  /** Optional: only this developer's rows. */
+  developerId: z.string().min(1).max(128).optional(),
+});
+export type AdminActivityPageQuery = z.infer<typeof AdminActivityPageQuerySchema>;
+
+export const AdminSponsorshipEventsQuerySchema = AdminActivityPageQuerySchema.extend({
+  /** Optional: only events of this type. */
+  type: SponsorshipEventTypeSchema.optional(),
+});
+export type AdminSponsorshipEventsQuery = z.infer<typeof AdminSponsorshipEventsQuerySchema>;
+
+function activityPageSchema<T extends z.ZodTypeAny>(item: T) {
+  return z.object({ items: z.array(item), nextCursor: z.string().nullable() });
+}
+
+export const AdminSponsorshipEventDTOSchema = z.object({
+  /** The event's idempotency key; OFFER_DISPLAYED eventIds are what `displayEventId` points at. */
+  eventId: z.string(),
+  type: SponsorshipEventTypeSchema,
+  offerId: z.string(),
+  developerId: z.string(),
+  sessionId: z.string().nullable(),
+  /** For client-reported events: the server-issued OFFER_DISPLAYED eventId they refer to. */
+  displayEventId: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type AdminSponsorshipEventDTO = z.infer<typeof AdminSponsorshipEventDTOSchema>;
+
+export const AdminSponsorshipEventsPageSchema = activityPageSchema(AdminSponsorshipEventDTOSchema);
+export type AdminSponsorshipEventsPage = z.infer<typeof AdminSponsorshipEventsPageSchema>;
+
+export const AdminRewardLedgerEntryDTOSchema = RewardLedgerEntryDTOSchema.extend({
+  developerId: z.string(),
+  /** The OFFER_DISPLAYED eventId an EARNED row rewards; null for non-event entries. */
+  sponsorshipEventId: z.string().nullable(),
+});
+export type AdminRewardLedgerEntryDTO = z.infer<typeof AdminRewardLedgerEntryDTOSchema>;
+
+export const AdminSponsorshipRewardsPageSchema = activityPageSchema(AdminRewardLedgerEntryDTOSchema);
+export type AdminSponsorshipRewardsPage = z.infer<typeof AdminSponsorshipRewardsPageSchema>;

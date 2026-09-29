@@ -3,18 +3,21 @@ import { apiGet, apiPost } from "./api";
 // ---------------------------------------------------------------------------
 // Admin review of Sponsorship campaigns (Phase 5).
 //
-// Consumes only the admin routes Phase 1 exposes:
+// Consumes these admin routes:
 //
 //   GET  /api/v1/admin/sponsorship-campaigns?status=...
 //   POST /api/v1/admin/sponsorship-campaigns/:id/approve   SUBMITTED -> APPROVED
 //   POST /api/v1/admin/sponsorship-campaigns/:id/reject    SUBMITTED -> REJECTED { reason }
 //   POST /api/v1/admin/sponsorship-campaigns/:id/pause     APPROVED  -> PAUSED
+//   GET  /api/v1/admin/sponsorship-campaigns/:id/events    read-only, paginated
+//   GET  /api/v1/admin/sponsorship-campaigns/:id/rewards   read-only, paginated
 //
-// The admin list returns the campaign record and its offers only: no stats,
-// no advertiser name, and there is no admin read route for SponsorshipEvent
-// or DeveloperRewardLedger rows. Nothing here works around that.
+// The list route also carries `advertiserName` and `stats` (added after
+// Phase 5, purely additively). They are optional here and validated when
+// present, so the list still parses against a server without them.
 //
-// Types mirror SponsorshipCampaignDTOSchema in packages/shared/src/sponsorship.ts
+// Types mirror AdminSponsorshipCampaignDTOSchema, AdminSponsorshipEventDTOSchema
+// and AdminRewardLedgerEntryDTOSchema in packages/shared/src/sponsorship.ts,
 // and responses are checked structurally before rendering. Money is integer
 // cents and rewards integer units, formatted from their digits (no floats).
 // ---------------------------------------------------------------------------
@@ -164,6 +167,17 @@ export interface AdminSponsorshipCampaign {
   approvedAt: string | null;
   createdAt: string;
   offers: AdminSponsoredOffer[];
+  /** The sponsor's display name (additive field on the admin list). */
+  advertiserName?: string;
+  /** Whole-campaign totals, same numbers the sponsor sees (additive field on the admin list). */
+  stats?: SponsorshipCampaignStats;
+}
+
+export interface SponsorshipCampaignStats {
+  displays: number;
+  completions: number;
+  rewardsGranted: number;
+  spendCents: number;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -223,8 +237,14 @@ export function isAdminSponsorshipCampaign(v: unknown): v is AdminSponsorshipCam
     isNullableString(v.approvedAt) &&
     typeof v.createdAt === "string" &&
     Array.isArray(v.offers) &&
-    v.offers.every(isOffer)
+    v.offers.every(isOffer) &&
+    (v.advertiserName === undefined || typeof v.advertiserName === "string") &&
+    (v.stats === undefined || isStats(v.stats))
   );
+}
+
+function isStats(v: unknown): v is SponsorshipCampaignStats {
+  return isObject(v) && isInt(v.displays) && isInt(v.completions) && isInt(v.rewardsGranted) && isInt(v.spendCents);
 }
 
 export interface AdminSponsorshipLists {
@@ -311,4 +331,144 @@ export function rejectSponsorshipCampaign(id: string, reason: string, post: Post
 
 export function pauseSponsorshipCampaign(id: string, post: Poster = apiPost) {
   return postAction(`${base(id)}/pause`, {}, "We couldn't pause the sponsorship campaign.", post);
+}
+
+// ---------------------------------------------------------------------------
+// Sponsorship activity (read-only, for fraud and abuse review)
+//
+// Both routes page newest first with an opaque `nextCursor` (null on the
+// last page). The server caps `limit` at 200; the page size here is fixed.
+// ---------------------------------------------------------------------------
+
+export const ACTIVITY_PAGE_SIZE = 50;
+
+export const SPONSORSHIP_EVENT_TYPES = [
+  "OFFER_REQUESTED",
+  "OFFER_DISPLAYED",
+  "OFFER_SKIPPED",
+  "OFFER_OPENED",
+  "OFFER_INTERACTED",
+  "OFFER_COMPLETED",
+] as const;
+export type SponsorshipEventType = (typeof SPONSORSHIP_EVENT_TYPES)[number];
+
+export const REWARD_ENTRY_TYPES = ["EARNED", "REVERSED", "REDEEMED", "EXPIRED", "ADJUSTMENT"] as const;
+export type RewardEntryType = (typeof REWARD_ENTRY_TYPES)[number];
+
+export const REWARD_STATUSES = ["PENDING", "APPROVED", "REJECTED", "REVERSED"] as const;
+export type RewardStatus = (typeof REWARD_STATUSES)[number];
+
+const EVENT_TYPE_LABELS: Record<SponsorshipEventType, string> = {
+  OFFER_REQUESTED: "Requested",
+  OFFER_DISPLAYED: "Displayed",
+  OFFER_SKIPPED: "Skipped",
+  OFFER_OPENED: "Opened",
+  OFFER_INTERACTED: "Interacted",
+  OFFER_COMPLETED: "Completed",
+};
+
+export function eventTypeLabel(t: SponsorshipEventType): string {
+  return EVENT_TYPE_LABELS[t];
+}
+
+export interface AdminSponsorshipEvent {
+  eventId: string;
+  type: SponsorshipEventType;
+  offerId: string;
+  developerId: string;
+  sessionId: string | null;
+  displayEventId: string | null;
+  createdAt: string;
+}
+
+export interface AdminRewardLedgerEntry {
+  id: string;
+  developerId: string;
+  rewardType: RewardType;
+  campaignId: string;
+  sponsorshipEventId: string | null;
+  entryType: RewardEntryType;
+  amountUnits: number;
+  status: RewardStatus;
+  createdAt: string;
+}
+
+export interface ActivityPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+export function isAdminSponsorshipEvent(v: unknown): v is AdminSponsorshipEvent {
+  return (
+    isObject(v) &&
+    typeof v.eventId === "string" &&
+    isOneOf(SPONSORSHIP_EVENT_TYPES, v.type) &&
+    typeof v.offerId === "string" &&
+    typeof v.developerId === "string" &&
+    isNullableString(v.sessionId) &&
+    isNullableString(v.displayEventId) &&
+    typeof v.createdAt === "string"
+  );
+}
+
+export function isAdminRewardLedgerEntry(v: unknown): v is AdminRewardLedgerEntry {
+  return (
+    isObject(v) &&
+    typeof v.id === "string" &&
+    typeof v.developerId === "string" &&
+    isOneOf(REWARD_TYPES, v.rewardType) &&
+    typeof v.campaignId === "string" &&
+    isNullableString(v.sponsorshipEventId) &&
+    isOneOf(REWARD_ENTRY_TYPES, v.entryType) &&
+    isInt(v.amountUnits) &&
+    isOneOf(REWARD_STATUSES, v.status) &&
+    typeof v.createdAt === "string"
+  );
+}
+
+function isPage<T>(v: unknown, isItem: (x: unknown) => x is T): v is ActivityPage<T> {
+  return isObject(v) && Array.isArray(v.items) && v.items.every(isItem) && isNullableString(v.nextCursor);
+}
+
+/** Time to the second in UTC, for spotting bursts: "2026-09-29 12:00:05". */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown time";
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+
+export type ActivityPageResult<T> =
+  | { status: "ok"; page: ActivityPage<T> }
+  | { status: "unauthenticated" }
+  | { status: "error"; message: string };
+
+async function fetchActivityPage<T>(
+  path: string,
+  cursor: string | null,
+  isItem: (x: unknown) => x is T,
+  what: string,
+  get: Getter
+): Promise<ActivityPageResult<T>> {
+  const params = new URLSearchParams({ limit: String(ACTIVITY_PAGE_SIZE) });
+  if (cursor) params.set("cursor", cursor);
+  try {
+    const { ok, status, data } = await get<unknown>(`${path}?${params.toString()}`);
+    if (status === 401 || status === 403) return { status: "unauthenticated" };
+    if (status === 404) return { status: "error", message: "That sponsorship campaign no longer exists." };
+    if (!ok) return { status: "error", message: `We couldn't load ${what}. Please try again.` };
+    if (!isPage(data, isItem)) return { status: "error", message: `The ${what} came back in a format we couldn't read.` };
+    return { status: "ok", page: data };
+  } catch {
+    return { status: "error", message: NETWORK_ERROR };
+  }
+}
+
+/** One page of a campaign's SponsorshipEvent rows, newest first. Never throws. */
+export function fetchSponsorshipEvents(campaignId: string, cursor: string | null = null, get: Getter = apiGet) {
+  return fetchActivityPage(`${base(campaignId)}/events`, cursor, isAdminSponsorshipEvent, "sponsorship events", get);
+}
+
+/** One page of a campaign's DeveloperRewardLedger rows, newest first. Never throws. */
+export function fetchSponsorshipRewards(campaignId: string, cursor: string | null = null, get: Getter = apiGet) {
+  return fetchActivityPage(`${base(campaignId)}/rewards`, cursor, isAdminRewardLedgerEntry, "reward ledger entries", get);
 }

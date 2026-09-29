@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   formatClientTypes,
@@ -17,7 +18,10 @@ export interface AdminSponsorshipActions {
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
   onPause?: (id: string) => void;
+  onViewActivity?: (id: string) => void;
   busyId?: string | null;
+  /** Id of the campaign whose activity is open, if any. */
+  activityCampaignId?: string | null;
 }
 
 function cap(n: number | null): string {
@@ -28,19 +32,47 @@ function money(n: number | null, currency: string): string {
   return n === null ? "none" : formatMoneyCents(n, currency);
 }
 
-function QueueCard({ c, onApprove, onReject, busyId }: { c: AdminSponsorshipCampaign } & AdminSponsorshipActions) {
+/** Sponsor name when the server sent it, always followed by the advertiser id. */
+function Advertiser({ c }: { c: AdminSponsorshipCampaign }) {
+  return (
+    <>
+      {c.advertiserName && <span>{c.advertiserName} </span>}
+      <span className="font-mono text-xs">{c.advertiserId}</span>
+    </>
+  );
+}
+
+function statsLine(c: AdminSponsorshipCampaign): string | null {
+  if (!c.stats) return null;
+  const s = c.stats;
+  return `${formatUnits(s.displays)} displays, ${formatUnits(s.completions)} completions, ${formatUnits(
+    s.rewardsGranted
+  )} rewards granted, ${formatMoneyCents(s.spendCents, c.currency)} spent`;
+}
+
+function ActivityButton({ c, onViewActivity, activityCampaignId }: { c: AdminSponsorshipCampaign } & AdminSponsorshipActions) {
+  if (!onViewActivity) return null;
+  return (
+    <button className="btn-secondary" disabled={activityCampaignId === c.id} onClick={() => onViewActivity(c.id)}>
+      Activity
+    </button>
+  );
+}
+
+function QueueCard({ c, onApprove, onReject, busyId, ...rest }: { c: AdminSponsorshipCampaign } & AdminSponsorshipActions) {
   return (
     <div className="card p-4" data-campaign-id={c.id}>
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <p className="font-medium">{c.name}</p>
           <p className="text-sm text-muted">
-            Advertiser <span className="font-mono">{c.advertiserId}</span> &middot; category:{" "}
+            Advertiser <Advertiser c={c} /> &middot; category:{" "}
             {c.sponsorCategory ?? "not specified"} &middot; {objectiveLabel(c.objective)} &middot; submitted{" "}
             {formatDate(c.submittedAt)}
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <ActivityButton c={c} {...rest} />
           <button className="btn-secondary" disabled={busyId === c.id} onClick={() => onReject?.(c.id)}>
             Reject
           </button>
@@ -58,6 +90,7 @@ function QueueCard({ c, onApprove, onReject, busyId }: { c: AdminSponsorshipCamp
         Per developer: {cap(c.developerDailyCap)}/day, {cap(c.developerLifetimeCap)} ever, displays{" "}
         {c.frequencyCapPerDay === null ? "platform default" : `${formatUnits(c.frequencyCapPerDay)}/day`}
       </p>
+      {statsLine(c) && <p className="text-xs text-muted mb-1">So far: {statsLine(c)}</p>}
       <p className="text-xs text-muted mb-3">
         Tools: {formatClientTypes(c.eligibleClientTypes)} &middot; Runs {formatDate(c.startDate)} to{" "}
         {c.endDate ? formatDate(c.endDate) : "no end date"} (UTC)
@@ -86,11 +119,14 @@ export function AdminSponsorshipsView({
   state,
   onRetry,
   actionError,
+  activityPanel,
   ...actions
 }: {
   state: AdminSponsorshipsState;
   onRetry?: () => void;
   actionError?: string | null;
+  /** The open campaign's activity (events and reward ledger), rendered in the activity section. */
+  activityPanel?: ReactNode;
 } & AdminSponsorshipActions) {
   if (state.status === "loading") return <p className="text-sm text-muted">Loading sponsorship campaigns...</p>;
   if (state.status === "unauthenticated") {
@@ -153,6 +189,7 @@ export function AdminSponsorshipsView({
                   <th className="font-normal p-3">Advertiser</th>
                   <th className="font-normal p-3">Status</th>
                   <th className="font-normal p-3">Reward / charge</th>
+                  <th className="font-normal p-3">Displays / completions / spend</th>
                   <th className="font-normal p-3"></th>
                 </tr>
               </thead>
@@ -165,13 +202,24 @@ export function AdminSponsorshipsView({
                         <span className="block text-xs text-muted">Rejected: {c.rejectionReason}</span>
                       )}
                     </td>
-                    <td className="p-3 font-mono text-xs">{c.advertiserId}</td>
+                    <td className="p-3">
+                      <Advertiser c={c} />
+                    </td>
                     <td className="p-3">{c.status}</td>
                     <td className="p-3">
                       {formatUnits(c.rewardAmountUnits)} {rewardTypeLabel(c.rewardType)} /{" "}
                       {formatMoneyCents(c.sponsorChargeCents, c.currency)}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3">
+                      {c.stats
+                        ? `${formatUnits(c.stats.displays)} / ${formatUnits(c.stats.completions)} / ${formatMoneyCents(
+                            c.stats.spendCents,
+                            c.currency
+                          )}`
+                        : "not available"}
+                    </td>
+                    <td className="p-3 text-right whitespace-nowrap space-x-2">
+                      <ActivityButton c={c} {...actions} />
                       {c.status === "APPROVED" && (
                         <button
                           className="btn-secondary"
@@ -192,10 +240,12 @@ export function AdminSponsorshipsView({
 
       <section className="card p-4">
         <h2 className="font-medium mb-2">Sponsorship activity and reward events</h2>
-        <p className="text-sm text-muted">
-          Not available yet. There is no admin read endpoint for sponsorship events or the developer reward
-          ledger, so displays, completions and rewards can&apos;t be inspected here for fraud or abuse review.
-        </p>
+        {activityPanel ?? (
+          <p className="text-sm text-muted">
+            Choose Activity on a sponsorship campaign to inspect its sponsorship events (displays, skips, opens,
+            completions per developer) and developer reward ledger, newest first, for fraud or abuse review.
+          </p>
+        )}
       </section>
     </>
   );

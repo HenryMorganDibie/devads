@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AdminActivityPageQuerySchema,
+  AdminSponsorshipCampaignDTOSchema,
+  AdminSponsorshipEventsPageSchema,
+  AdminSponsorshipEventsQuerySchema,
   CreateSponsorshipCampaignSchema,
   RewardTypeSchema,
   SponsorshipEventRequestSchema,
@@ -78,5 +82,35 @@ describe("sponsorship schemas", () => {
     expect(
       StartDevelopmentSessionSchema.safeParse({ clientType: "AIDER", activityCategory: "refactor src/secret.ts" }).success
     ).toBe(false);
+  });
+
+  it("admin activity paging: default limit, bounds, coerced query strings", () => {
+    expect(AdminActivityPageQuerySchema.parse({})).toEqual({ limit: 50 });
+    expect(AdminActivityPageQuerySchema.parse({ limit: "200", cursor: "abc" })).toEqual({ limit: 200, cursor: "abc" });
+    expect(AdminActivityPageQuerySchema.safeParse({ limit: "201" }).success).toBe(false);
+    expect(AdminActivityPageQuerySchema.safeParse({ limit: "0" }).success).toBe(false);
+    expect(AdminSponsorshipEventsQuerySchema.safeParse({ type: "OFFER_COMPLETED" }).success).toBe(true);
+    expect(AdminSponsorshipEventsQuerySchema.safeParse({ type: "NOPE" }).success).toBe(false);
+  });
+
+  it("admin event rows keep no metadata and admin campaigns require name + stats", () => {
+    const page = AdminSponsorshipEventsPageSchema.parse({
+      items: [
+        {
+          eventId: "e1",
+          type: "OFFER_COMPLETED",
+          offerId: "o1",
+          developerId: "d1",
+          sessionId: null,
+          displayEventId: "disp1",
+          createdAt: "2026-09-29T00:00:00.000Z",
+          metadata: { secret: "x" },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect("metadata" in page.items[0]).toBe(false);
+    expect(AdminSponsorshipCampaignDTOSchema.shape.advertiserName.safeParse(undefined).success).toBe(false);
+    expect(AdminSponsorshipCampaignDTOSchema.shape.stats.safeParse(undefined).success).toBe(false);
   });
 });
