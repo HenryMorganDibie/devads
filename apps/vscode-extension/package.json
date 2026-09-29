@@ -24,7 +24,11 @@
       { "command": "devads.openDashboard", "title": "DevAds: Open Dashboard" },
       { "command": "devads.showStatus", "title": "DevAds: Show Status" },
       { "command": "devads.adClicked", "title": "DevAds: Open Sponsor Link" },
-      { "command": "devads.adDismissed", "title": "DevAds: Dismiss Ad" }
+      { "command": "devads.adDismissed", "title": "DevAds: Dismiss Ad" },
+      { "command": "devads.showRewardWallet", "title": "DevAds: Show Reward Wallet" },
+      { "command": "devads.sponsorship.showOffer", "title": "DevAds: Show Sponsored Offer" },
+      { "command": "devads.sponsorship.openOffer", "title": "DevAds: Open Sponsored Offer" },
+      { "command": "devads.sponsorship.skipOffer", "title": "DevAds: Skip Sponsored Offer" }
     ],
     "configuration": {
       "title": "DevAds",
@@ -71,6 +75,11 @@
           "type": "boolean",
           "default": true,
           "description": "Send coarse, allowlisted context (language, framework, runtime, platform, country) with ad requests. Never sends source code, file contents, environment variables, secrets, or full command arguments."
+        },
+        "devads.sponsorship.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show sponsored offers that carry a developer reward (for example AI or API credits) during long-running terminal commands, and keep a DevAds development session open while signed in. Offers only appear when devads.enabled is also on, and your DevAds account opt-in is still enforced by the server. Sends only this extension's client type and version plus session and offer ids. Never sends source code, prompts, file paths, or command lines."
         }
       }
     }
@@ -82,7 +91,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@devads/ad-sdk": "*"
+  },
   "devDependencies": {
     "@types/node": "^20.16.11",
     "@types/vscode": "^1.93.0",

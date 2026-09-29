@@ -6,9 +6,22 @@ import { AdClient, type AdCandidate } from "./adClient";
 import { StatusBarAd } from "./statusBarAd";
 import { buildContext, coarseCommandName } from "./contextDetect";
 import { getDeveloperId, getSessionToken, signIn, signOut } from "./auth";
+import { createSponsorshipClient } from "./sponsorshipClient";
+import { SponsorshipSession } from "./sponsorshipSession";
+import { SponsoredOfferController } from "./sponsoredOffer";
+import {
+  OPEN_OFFER_COMMAND,
+  SHOW_OFFER_COMMAND,
+  SKIP_OFFER_COMMAND,
+  StatusBarSponsoredOffer,
+} from "./statusBarSponsoredOffer";
+import { loadWallet } from "./rewardWallet";
 
 const POLL_INTERVAL_MS = 1000;
 const INSTALLATION_ID_KEY = "devads.installationId";
+
+// Held at module scope only so deactivate() can end the sponsorship session.
+let activeSponsorshipSession: SponsorshipSession | undefined;
 
 function readConfig() {
   const cfg = vscode.workspace.getConfiguration("devads");
@@ -18,6 +31,7 @@ function readConfig() {
     adServerUrl: cfg.get<string>("adServerUrl", "http://localhost:4000"),
     webAppUrl: cfg.get<string>("webAppUrl", "http://localhost:3000"),
     telemetryEnabled: cfg.get<boolean>("telemetryEnabled", true),
+    sponsorshipEnabled: cfg.get<boolean>("sponsorship.enabled", true),
   };
 }
 
@@ -34,6 +48,56 @@ export function activate(context: vscode.ExtensionContext) {
     (ad) => void handleAdDismiss(ad)
   );
   context.subscriptions.push(statusBar);
+
+  // --- Sponsorship (DevAds Protocol via @devads/ad-sdk) ------------------
+  // A separate, optional path next to the standard ad flow above. Every
+  // piece of it is failure-tolerant: if the sponsorship API is unreachable
+  // or rejects, only sponsored offers are missing; standard ads, commands
+  // and activation are unaffected.
+  const sponsorshipLog = vscode.window.createOutputChannel("DevAds Sponsorship");
+  context.subscriptions.push(sponsorshipLog);
+  const log = (message: string) => sponsorshipLog.appendLine(`[${new Date().toISOString()}] ${message}`);
+  const extensionVersion = (context.extension.packageJSON as { version?: string } | undefined)?.version;
+  const getSponsorshipClient = () =>
+    createSponsorshipClient({
+      adServerUrl: readConfig().adServerUrl,
+      extensionVersion,
+      getToken: () => getSessionToken(context),
+      getDeveloperId: () => getDeveloperId(context),
+    });
+  const sponsorshipSession = new SponsorshipSession(getSponsorshipClient, log);
+  activeSponsorshipSession = sponsorshipSession;
+  const sponsoredOfferView = new StatusBarSponsoredOffer();
+  context.subscriptions.push(sponsoredOfferView);
+  const sponsoredOffers = new SponsoredOfferController({
+    getClient: getSponsorshipClient,
+    session: sponsorshipSession,
+    view: sponsoredOfferView,
+    openExternal: async (url) => vscode.env.openExternal(vscode.Uri.parse(url)),
+    notify: (message) => void vscode.window.showInformationMessage(message),
+    log,
+  });
+
+  async function startSponsorshipSessionIfReady() {
+    const config = readConfig();
+    if (!config.enabled || !config.sponsorshipEnabled) return;
+    if (!getDeveloperId(context) || !(await getSessionToken(context))) return;
+    await sponsorshipSession.start();
+  }
+  void startSponsorshipSessionIfReady();
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration("devads.sponsorship.enabled") && !e.affectsConfiguration("devads.enabled")) return;
+      const config = readConfig();
+      if (config.enabled && config.sponsorshipEnabled) {
+        void startSponsorshipSessionIfReady();
+      } else {
+        sponsoredOffers.onCommandEnd();
+        void sponsorshipSession.end();
+      }
+    })
+  );
 
   let pollTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -131,6 +195,19 @@ export function activate(context: vscode.ExtensionContext) {
         statusBar.show(ad);
       }
     }
+
+    // Sponsored offers: same wait signal, read-only use of the trackers,
+    // after the standard flow has had its turn. maybeRequest never throws.
+    if (config.enabled && config.sponsorshipEnabled) {
+      for (const [, tracker] of trackers) {
+        await sponsoredOffers.maybeRequest(tracker, {
+          enabled: true,
+          minimumWaitSeconds: config.minimumWaitSeconds,
+          isSignedIn,
+          standardAdShowing: statusBar.getCurrent() !== null,
+        });
+      }
+    }
   }
 
   function ensurePolling() {
@@ -157,6 +234,7 @@ export function activate(context: vscode.ExtensionContext) {
           trackers.set(e.terminal, tracker);
         }
         tracker.onCommandStart(e.execution.commandLine.value);
+        sponsoredOffers.onCommandStart(tracker);
         ensurePolling();
       })
     );
@@ -166,6 +244,7 @@ export function activate(context: vscode.ExtensionContext) {
         const tracker = trackers.get(e.terminal);
         tracker?.onCommandEnd();
         void reportViewCompleteIfShown();
+        sponsoredOffers.onCommandEnd();
       })
     );
 
@@ -182,8 +261,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- Commands ---------------------------------------------------------
   context.subscriptions.push(
-    vscode.commands.registerCommand("devads.signIn", () => signIn(context, readConfig().adServerUrl)),
-    vscode.commands.registerCommand("devads.signOut", () => signOut(context)),
+    vscode.commands.registerCommand("devads.signIn", async () => {
+      const signedIn = await signIn(context, readConfig().adServerUrl);
+      if (signedIn) void startSponsorshipSessionIfReady();
+      return signedIn;
+    }),
+    vscode.commands.registerCommand("devads.signOut", async () => {
+      // End the sponsorship session while the token still exists.
+      sponsoredOffers.onCommandEnd();
+      await sponsorshipSession.end();
+      return signOut(context);
+    }),
     vscode.commands.registerCommand("devads.enable", () =>
       vscode.workspace.getConfiguration("devads").update("enabled", true, vscode.ConfigurationTarget.Global)
     ),
@@ -207,11 +295,49 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("devads.adDismissed", () => {
       const ad = statusBar.getCurrent();
       if (ad) void handleAdDismiss(ad);
+    }),
+    vscode.commands.registerCommand(SHOW_OFFER_COMMAND, async () => {
+      const offer = sponsoredOffers.getCurrent();
+      if (!offer) return;
+      void sponsoredOffers.interact();
+      const view = "View offer";
+      const skip = "Skip";
+      const choice = await vscode.window.showInformationMessage(
+        `Sponsored: ${offer.title}. ${offer.description}`,
+        view,
+        skip
+      );
+      if (choice === view) await sponsoredOffers.open(offer);
+      else if (choice === skip && sponsoredOffers.getCurrent()?.displayEventId === offer.displayEventId) {
+        await sponsoredOffers.skip();
+      }
+    }),
+    vscode.commands.registerCommand(OPEN_OFFER_COMMAND, () => sponsoredOffers.open()),
+    vscode.commands.registerCommand(SKIP_OFFER_COMMAND, () => sponsoredOffers.skip()),
+    vscode.commands.registerCommand("devads.showRewardWallet", async () => {
+      const isSignedIn = Boolean(getDeveloperId(context) && (await getSessionToken(context)));
+      const result = await loadWallet(getSponsorshipClient(), isSignedIn);
+      if (!result.ok) {
+        void vscode.window.showWarningMessage(result.message);
+        return;
+      }
+      if (result.lines.length === 0) {
+        void vscode.window.showInformationMessage("DevAds: your reward wallet is empty so far.");
+        return;
+      }
+      await vscode.window.showQuickPick(
+        result.lines.map((line) => ({ label: line.label, description: line.detail })),
+        { title: "DevAds Reward Wallet", placeHolder: "Available and pending reward units by type" }
+      );
     })
   );
 }
 
-export function deactivate() {
+export function deactivate(): Promise<void> | undefined {
   // Nothing to persist -- session lives in SecretStorage, timers are
-  // disposed via context.subscriptions.
+  // disposed via context.subscriptions. The only work is closing the
+  // sponsorship session, which never throws.
+  const session = activeSponsorshipSession;
+  activeSponsorshipSession = undefined;
+  return session?.end();
 }

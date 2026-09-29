@@ -220,3 +220,85 @@ Code, Codex, Gemini, Cursor, OpenCode, Aider, or a custom or local agent)
 would build against this same client. None of those adapters exist, not even
 as stubs, and no AI-provider integration exists. The only trace of those
 tools is the shared `DevClientType` enum value each would send.
+
+## VS Code extension as the first protocol client (Phase 3)
+
+The VS Code extension (`apps/vscode-extension`) is the first real client of
+the DevAds Protocol. It consumes `@devads/ad-sdk` as-is for the sponsorship
+domain. Its existing standard-ad flow (`AdClient` calling
+`/api/v1/ads/select` and `/api/v1/events`, `CommandTracker`, the
+eligibility gate and the `StatusBarAd` card) is unchanged and does not
+depend on any sponsorship code.
+
+| Piece | File | What it does |
+| --- | --- | --- |
+| Client factory | `src/sponsorshipClient.ts` | Builds a `DevAdsClient` with `clientType: "VS_CODE"`, the extension's own `package.json` version, and the existing device-auth session token (re-read from SecretStorage on every call). No new auth. |
+| Session lifecycle | `src/sponsorshipSession.ts` | `startSession()` on activation when already signed in, after a successful **DevAds: Sign In**, and when `devads.enabled` and `devads.sponsorship.enabled` are both turned on. `endSession()` on deactivation, on **Sign Out** (before the token is deleted) and when either setting is turned off. |
+| Sponsored offer | `src/sponsoredOffer.ts`, `src/statusBarSponsoredOffer.ts` | Asks `requestSponsoredOpportunity()` on the same terminal-wait signal the standard flow uses, and shows the result in its own status bar item labelled "Sponsored" with the reward. Wires skip, interact and open to `reportOfferEvent()` and completion to `completeQualifyingAction()`, all correlated by the offer's `displayEventId` and the session it was displayed under. |
+| Wallet | `src/rewardWallet.ts` | **DevAds: Show Reward Wallet** calls `getWallet()` and lists available and pending units per reward type in a Quick Pick. |
+
+Behavior:
+
+- **Same trigger, separate path.** The sponsorship pass runs after the
+  standard ad pass in the same polling tick and only reads the
+  `CommandTracker` (elapsed time, still running). It keeps its own
+  once-per-command bookkeeping, so it never consumes or changes the
+  standard flow's request. If a standard ad is already showing for a wait,
+  no sponsored offer is requested for that wait, so there is one promotional
+  surface at a time. Like standard cards, an offer is only shown if the
+  command is still running when the response arrives, and it disappears
+  when the command ends (without reporting a skip).
+- **Failure tolerant.** Every sponsorship call is wrapped. A network error,
+  timeout, server rejection or malformed response means no offer, no
+  session or no wallet, logged to the "DevAds Sponsorship" output channel.
+  It never throws into activation, commands or the standard ad flow. If the
+  session can't be started, offer requests fall back to the client type
+  alone. A `session_ended` / `forbidden` reply drops the cached session so
+  the next wait starts a fresh one.
+- **Qualifying action is an explicit user action only.** The only thing
+  the extension counts is the developer choosing **View offer** and VS Code
+  confirming the link actually opened. That reports `OFFER_OPENED`, and,
+  if the offer has no further `requiredAction`, `completeQualifyingAction()`.
+  When a sponsor states a further required action (free text such as
+  "create a project"), the extension cannot observe it without invasive
+  tracking, so it reports `OFFER_OPENED` only and does not claim
+  completion. There is no process inspection, SDK-init or deploy
+  detection, and no heuristic. The server still decides whether a reward is
+  granted, and caps or campaign-ended refusals are final for that display.
+- **Privacy.** The sponsorship path sends strictly less than the standard
+  flow: client type, extension version, session id, the server-issued
+  `displayEventId`, generated event ids, and (for the wallet) the developer
+  id from the existing sign-in. It does not use `contextDetect.ts` at all:
+  no language, runtime, platform, command name, file path, source code,
+  prompt content or secret is passed to the SDK. Sponsor-provided text is
+  rendered escaped, and the tooltip only trusts the offer's own open/skip
+  commands.
+- **Opt-out.** `devads.sponsorship.enabled` (default on) turns the whole
+  sponsorship path off without uninstalling, and offers also require the
+  existing `devads.enabled`. The authoritative opt-in is still server-side:
+  the offer endpoint refuses offers to developers whose
+  `DeveloperProfile.adsEnabled` is off, so the client does not duplicate
+  that check.
+
+**The adapter pattern.** This is the shape any future DevAds client would
+follow: build a `DevAdsClient` with its own `DevClientType` value and
+version, reuse the user's existing session token, open and close a
+development session around its lifetime, request an offer only at a natural
+wait it can already observe, report interactions against `displayEventId`,
+count only qualifying actions the tool can honestly observe, and degrade to
+"no offer" on any failure. Only the VS Code extension does this today.
+Adapters for Claude Code, Codex, Gemini, Cursor, OpenCode, Aider or custom
+and local agents are not built, not even as stubs.
+
+Known gaps found while integrating (not patched in the SDK or server):
+
+- `SponsoredOfferCandidate` has no sponsor or advertiser display name, so
+  the card shows the offer title, description and reward, not a sponsor
+  name.
+- `requiredAction` is free text, with no machine-readable "opening the link
+  is the qualifying action" flag. The extension infers it from an empty
+  `requiredAction`, which is a client-side policy decision.
+- `OFFER_DISPLAYED` is recorded when the server selects an offer, not when
+  a client renders it. An offer that arrives after the command already
+  ended is dropped by the extension but still counts as displayed (same
+  timing model as standard-ad impressions).

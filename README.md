@@ -192,6 +192,10 @@ Sponsorships (additive, server-side foundation): a provider-agnostic
 developer sponsorship domain (development sessions, sponsored offers,
 reward ledger and wallet) that sits alongside the ad system without
 changing it. See [docs/sponsorship-architecture.md](./docs/sponsorship-architecture.md).
+The VS Code extension is the only client wired to it so far (through
+`@devads/ad-sdk`): it can show a reward-carrying sponsored offer during a
+wait and list the developer's reward wallet. No other editor or agent
+integration exists yet.
 
 ## License
 

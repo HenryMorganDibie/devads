@@ -22,6 +22,20 @@ When you view, click, or dismiss an ad, the extension reports which
 event happened, for which campaign/impression, and (for view-complete) how
 long the ad was visible -- nothing else.
 
+For sponsored offers with rewards (`devads.sponsorship.enabled`), the
+extension sends less than the above:
+
+| Field | Example | Notes |
+|---|---|---|
+| Client type | `VS_CODE` | fixed value identifying the tool |
+| Extension version | `0.1.0` | from the extension's own manifest |
+| Session id, offer display id, event id | opaque ids | server-issued, or random per event |
+| Interaction type | `OFFER_SKIPPED` / `OFFER_OPENED` / `OFFER_INTERACTED` / `OFFER_COMPLETED` | only after an explicit click |
+| Developer id | opaque id | only when you run **DevAds: Show Reward Wallet** |
+
+No language, runtime, platform or command name is sent with offer
+requests.
+
 ## What is never collected
 
 - Source code or file contents
@@ -38,6 +52,8 @@ long the ad was visible -- nothing else.
   extension from sending even the allowlisted fields above with ad
   requests.
 - `devads.enabled`: disables ad requests entirely.
+- `devads.sponsorship.enabled`: disables sponsored-offer requests and the
+  reward session without affecting regular cards.
 - Delete your account and all associated data any time: developer dashboard
   → account settings, or `DELETE /api/v1/developers/:id` (also available via
   `GET /api/v1/developers/:id/export` first, to see everything that will be

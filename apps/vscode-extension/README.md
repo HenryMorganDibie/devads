@@ -17,13 +17,21 @@ if your build finishes before the minimum wait threshold, you never see an ad.
 4. You can disable DevAds entirely, filter by category, or adjust the minimum
    wait time in Settings (search "DevAds").
 
+On a wait with no regular card showing, DevAds may instead show a
+**sponsored offer** with a reward (for example AI or API credits) in its own
+status bar item labelled "Sponsored", with **View offer** and **Skip**.
+Opening the sponsor's link is the only action DevAds counts toward a reward,
+and the server decides whether one is granted. Turn offers off with
+`devads.sponsorship.enabled`.
+
 ## Privacy
 
 DevAds only ever sends: detected programming language, runtime, OS platform, and
 the **name** of the command being run (e.g. `npm`, never the full command line
 or its arguments). It never reads file contents, environment variables,
-secrets, or source code. See the full privacy policy at the DevAds web app
-(`/privacy`).
+secrets, or source code. Sponsored offers send less: only the extension's
+client type and version plus session and offer ids. See the full privacy
+policy at the DevAds web app (`/privacy`).
 
 ## Commands
 
@@ -31,6 +39,7 @@ secrets, or source code. See the full privacy policy at the DevAds web app
 - `DevAds: Enable` / `DevAds: Disable`
 - `DevAds: Open Dashboard`
 - `DevAds: Show Status`
+- `DevAds: Show Reward Wallet`
 
 ## Requirements
 

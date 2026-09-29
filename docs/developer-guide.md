@@ -31,6 +31,27 @@ the status bar, and only when:
 The card disappears the instant the command finishes, fails, or is
 cancelled. If your build takes 3 seconds, you'll never see an ad.
 
+### Sponsored offers with rewards
+
+On the same kind of wait, the extension may instead show a **sponsored
+offer**: a separate status bar item labelled "Sponsored" with a title, a
+short description and a reward (for example "50 units (AI credits)").
+Offers come from the sponsorship API through `@devads/ad-sdk`. If a regular
+sponsored card is already showing for a wait, no offer is shown for that
+wait. Like the card, an offer disappears when the command ends.
+
+- Click the item (or hover it) to **View offer** or **Skip**.
+- **View offer** opens the sponsor's link. Opening it is the only action the
+  extension counts. If the offer has no further required action, that
+  counts as completing it and the server decides whether you earn the
+  reward. If the sponsor asks for something more (shown as "To earn it:"),
+  the extension does not track it and does not claim the reward.
+- **DevAds: Show Reward Wallet** lists your available and pending reward
+  units per reward type.
+
+Offers send only the extension's client type and version plus session and
+offer ids. They don't use your language, platform or command name.
+
 ## Settings
 
 Search "DevAds" in VS Code settings:
@@ -44,6 +65,10 @@ Search "DevAds" in VS Code settings:
   what this controls.
 - `devads.videoAdsEnabled` -- reserved; the v1 status-bar surface doesn't
   render video yet.
+- `devads.sponsorship.enabled` -- turns sponsored offers and the reward
+  session off without uninstalling (default on). Offers also need
+  `devads.enabled`, and your dashboard opt-in is still enforced by the
+  server.
 
 ## Earnings
 
