@@ -75,11 +75,12 @@ packages/
   shared/      Money utilities, Zod DTOs, Payout/Billing provider abstraction
   auth/        Sessions, magic links, device-auth codes, password hashing
   targeting/   Pure ad eligibility/targeting/frequency-cap/budget engine
+  ad-sdk/      DevAds Protocol SDK and client adapter runtime
 
 services/
   ad-server/   Fastify API -- the one place all money/eligibility logic lives
 
-docs/          architecture, sponsorship architecture, privacy, advertiser guide, developer guide, OpenAPI spec
+docs/          architecture, sponsorship architecture, client adapters, redemption, privacy, advertiser guide, developer guide, OpenAPI spec
 scripts/       demo.js (one-command setup), demo-wait.js (simulated slow command)
 ```
 
@@ -195,7 +196,10 @@ changing it. See [docs/sponsorship-architecture.md](./docs/sponsorship-architect
 The VS Code extension is the only client wired to it so far (through
 `@devads/ad-sdk`): it can show a reward-carrying sponsored offer during a
 wait and list the developer's reward wallet. No other editor or agent
-integration exists yet.
+integration exists yet; the adapter boundary for building one, and what
+each would legitimately require, is in [docs/adapters.md](./docs/adapters.md).
+Developers can redeem reward units when an operator enables a redemption
+provider (today: operator-fulfilled `manual`); see [docs/redemption.md](./docs/redemption.md).
 
 ## License
 

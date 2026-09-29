@@ -21,8 +21,9 @@ packages/
   shared/      Money utilities (integer cents), Zod DTOs, Payout/BillingProvider
   auth/        Password hashing, session JWTs, magic links, device-auth codes
   targeting/   Pure eligibility/targeting/frequency-cap/budget functions
-  ad-sdk/      (reserved for a future shared client SDK; the extension
-               currently has its own thin adClient.ts -- see Roadmap)
+  ad-sdk/      DevAds Protocol SDK + host-agnostic adapter runtime for
+               sponsorship clients (the standard ad flow still uses the
+               extension's own adClient.ts); see adapters.md
 
 services/
   ad-server/   Fastify API: /api/v1/{auth,ads,events,earnings,campaigns,admin,developers}

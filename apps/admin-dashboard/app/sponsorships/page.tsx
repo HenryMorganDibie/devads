@@ -114,6 +114,7 @@ export default function AdminSponsorshipsPage() {
           <nav className="flex items-center gap-4 text-sm text-muted">
             <Link href="/campaigns" className="hover:text-white">Campaigns</Link>
             <Link href="/sponsorships" className="text-white">Sponsorships</Link>
+            <Link href="/redemptions" className="hover:text-white">Redemptions</Link>
             <Link href="/advertisers" className="hover:text-white">Advertisers</Link>
             <Link href="/overview" className="hover:text-white">Overview</Link>
           </nav>

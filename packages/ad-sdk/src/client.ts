@@ -1,6 +1,9 @@
 import type { z } from "zod";
 import {
   DevelopmentSessionDTOSchema,
+  RedeemRewardRequestSchema,
+  RedeemRewardResponseSchema,
+  RewardRedemptionListResponseSchema,
   RewardWalletResponseSchema,
   SponsoredOfferListRequestSchema,
   SponsoredOfferListResponseSchema,
@@ -22,6 +25,9 @@ import type {
   OpportunityContext,
   OpportunityListFilter,
   QualifyingActionInput,
+  RedeemRewardInput,
+  RedeemRewardResult,
+  RewardRedemptionList,
   RewardWallet,
   SessionContext,
   SponsoredOpportunity,
@@ -179,7 +185,45 @@ export class DevAdsClient {
     return this.call(ROUTES.wallet.method, ROUTES.wallet.path(), RewardWalletResponseSchema, { query: { developerId: id } });
   }
 
+  /**
+   * The developer's recent redemptions, and whether redemption is enabled on
+   * this server (and for which reward types). Read-only.
+   */
+  async listRedemptions(developerId?: string): Promise<RewardRedemptionList> {
+    const id = await this.developerIdOrThrow(developerId);
+    return this.call(ROUTES.listRedemptions.method, ROUTES.listRedemptions.path(), RewardRedemptionListResponseSchema, {
+      query: { developerId: id },
+    });
+  }
+
+  /**
+   * Asks the server to redeem wallet units. The server checks the balance,
+   * picks the provider and decides the outcome: the redemption may come back
+   * COMPLETED, PENDING (an operator fulfils it later) or FAILED (the units
+   * are returned). A retry with the same idempotencyKey returns the original
+   * redemption with `idempotent: true` and debits nothing. Refusals reject
+   * with DevAdsError code "rejected" and a `reason` such as
+   * "insufficient_balance", "redemption_disabled" or "reward_type_not_redeemable".
+   */
+  async redeemReward(input: RedeemRewardInput): Promise<RedeemRewardResult> {
+    const developerId = await this.developerIdOrThrow(input.developerId);
+    const body = validateRequest(RedeemRewardRequestSchema, {
+      developerId,
+      rewardType: input.rewardType,
+      amountUnits: input.amountUnits,
+      idempotencyKey: input.idempotencyKey ?? this.generateEventId(),
+    });
+    const res = await this.call(ROUTES.redeem.method, ROUTES.redeem.path(), RedeemRewardResponseSchema, { body });
+    return { ...res, idempotencyKey: body.idempotencyKey };
+  }
+
   // -------------------------------------------------------------------------
+
+  private async developerIdOrThrow(developerId?: string): Promise<string> {
+    const id = developerId ?? (await resolveValue(this.credentials.developerId));
+    if (!id) throw new DevAdsError("invalid_request", "developerId is required (pass it or set credentials.developerId)");
+    return id;
+  }
 
   private async sendEvent(
     type: "OFFER_SKIPPED" | "OFFER_OPENED" | "OFFER_INTERACTED" | "OFFER_COMPLETED",

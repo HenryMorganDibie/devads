@@ -3,6 +3,9 @@ import type {
   ClientSponsorshipEventTypeSchema,
   DevClientTypeDTO,
   DevelopmentSessionDTO,
+  RedeemRewardResponse,
+  RewardRedemptionDTO,
+  RewardRedemptionListResponse,
   RewardTypeDTO,
   RewardWalletResponse,
   SponsoredOfferCandidate,
@@ -36,6 +39,22 @@ export type SponsoredOpportunity = SponsoredOfferCandidate;
 export type SponsoredOpportunityListing = SponsoredOfferListing;
 export type SponsoredOpportunityList = SponsoredOfferListResponse;
 export type RewardWallet = RewardWalletResponse;
+export type RewardRedemption = RewardRedemptionDTO;
+/** The developer's recent redemptions, plus whether redeeming is enabled and for which reward types. */
+export type RewardRedemptionList = RewardRedemptionListResponse;
+
+export interface RedeemRewardInput {
+  rewardType: RewardType;
+  /** Positive integer number of wallet units. The server checks the balance. */
+  amountUnits: number;
+  /** Idempotency key. Generated if omitted; pass the returned one back when retrying. */
+  idempotencyKey?: string;
+  /** Defaults to credentials.developerId. */
+  developerId?: string;
+}
+
+/** Server result plus the idempotencyKey that was sent (reuse it to retry safely). */
+export type RedeemRewardResult = RedeemRewardResponse & { idempotencyKey: string };
 
 /** A value, or a (possibly async) function returning it, re-read on every call so token refresh/sign-out is picked up. */
 export type ValueSource = string | (() => string | undefined | null | Promise<string | undefined | null>);
