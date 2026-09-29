@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGet, apiPatch, apiPost, clearSession, formatCents, loadSession } from "../../lib/api";
+import { DeveloperNav } from "../../components/DeveloperNav";
 
 interface Earnings {
   currency: string;
@@ -81,6 +82,7 @@ export default function DashboardPage() {
           Sign out
         </button>
       </div>
+      <DeveloperNav current="earnings" />
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <Stat label="Today" value={formatCents(earnings?.today ?? 0, earnings?.currency)} />

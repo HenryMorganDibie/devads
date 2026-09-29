@@ -302,3 +302,69 @@ Known gaps found while integrating (not patched in the SDK or server):
   a client renders it. An offer that arrives after the command already
   ended is dropped by the extension but still counts as displayed (same
   timing model as standard-ad impressions).
+
+## Developer-facing web pages (Phase 4)
+
+Phase 4 adds the first sponsorship UI to `apps/web`, the developer
+dashboard. It is additive: the earnings, payout, preferences and device
+pairing pages keep their logic, and the only change to an existing page is
+a small link row (`components/DeveloperNav.tsx`) under the dashboard header
+so the new pages are reachable. The new pages use the same data-fetching
+and auth pattern as the dashboard: client components, the stored session
+from `lib/api.ts` (redirect to `/login` without a `developerId`), and the
+shared `apiGet` helper with the session's bearer token. They consume only
+routes Phase 1 already exposes. No server route, Prisma model or SDK method
+was added.
+
+| Page | File | Data |
+| --- | --- | --- |
+| `/rewards` ("Developer Rewards") | `app/rewards/page.tsx`, `components/RewardWalletView.tsx`, `lib/rewards.ts` | `GET /api/v1/wallet?developerId=...` |
+| `/sponsorships` ("Sponsorships") | `app/sponsorships/page.tsx`, `components/SponsorshipsView.tsx`, `lib/sponsorships.ts` | `GET /api/v1/developers/:id/preferences` (the `adsEnabled` opt-in) |
+
+**Reward wallet.** One card per reward type with available and pending
+units and a "This month: +680 earned  -400 redeemed" line, followed by the
+ledger history (date, reward type, entry type, signed amount, status).
+Units are the server's opaque integers and are formatted by grouping their
+digits, never by converting to a fractional value. Signs follow the
+server's ledger-balance rule: EARNED and ADJUSTMENT credit, REVERSED,
+REDEEMED and EXPIRED debit. "This month" is the current UTC month, and
+earned counts EARNED rows that are APPROVED or PENDING. The response is
+checked structurally (known enums, integer units) before rendering. A
+cache/ledger disagreement (`availableUnits` vs `ledgerAvailableUnits`) is
+shown as a reconciliation note instead of being hidden. The page states
+plainly that redemption isn't available yet.
+
+**Sponsorships page.** Explains that sponsorships are paid placements,
+separate from standard ads and from organic content, and uses a visible
+"Sponsored" label. It shows whether the developer's sponsored-content
+switch is on (the shared `adsEnabled` flag), where offers appear today (the
+VS Code extension's "Sponsored" status bar item), and links to the wallet.
+Nav and page copy say "Sponsorships" and "Developer Rewards", never "Ads".
+
+Every state is handled on both pages: loading, expired session (sign-in
+link), request/network/malformed-response errors (message plus retry) and
+empty (no rewards yet / no browsable sponsorships). Tests live in
+`apps/web/__tests__` and run under vitest, which `apps/web` now uses like
+the other workspace packages; views are rendered with
+`react-dom/server`, so no DOM test library was added.
+
+Known gaps (not patched in this phase):
+
+- **No read-only offer listing.** `GET /api/v1/sponsorships/offer` is a
+  selection call: a non-null response records a server-side
+  `OFFER_DISPLAYED`, counts against the developer's per-campaign daily
+  display cap and the sponsor's display stats, and needs a `DevClientType`,
+  which has no web value. Calling it from a web page would spend real
+  display budget on a surface that can't complete the offer, so the
+  Sponsorships page never calls it and shows an honest "no list to browse"
+  state. A real marketplace needs a side-effect-free endpoint that lists
+  the live offers a developer is eligible for, and a decision on whether
+  the web is a client that may display and complete offers.
+- **Ledger window.** The wallet returns the 50 most recent ledger rows with
+  no pagination. History shows only that window, and the monthly totals
+  are marked as possibly incomplete when all 50 rows fall in the current
+  month.
+- **No sponsor or campaign names** in ledger entries (only `campaignId`),
+  so history rows can't say which sponsorship a reward came from.
+- **No separate sponsorship opt-in.** The page reflects `adsEnabled`, which
+  also controls standard ads.
