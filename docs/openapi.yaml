@@ -465,13 +465,22 @@ paths:
         Server-authoritative selection over approved sponsorship campaigns,
         honouring the developer's opt-in, client eligibility, frequency caps,
         per-developer reward caps and budgets. The client never chooses the
-        offer or the reward.
+        offer or the reward. A VIDEO offer is only eligible when one of its
+        creatives fits availableWaitSeconds; the longest fitting creative is
+        returned in `creative` (never a longer one), and without a window no
+        video is served. An offer's ctaUrl `{displayEventId}` token is
+        replaced with this display's id. See beta-video-ads.md.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: sessionId, in: query, required: false, schema: { type: string } }
         - { name: clientType, in: query, required: false, schema: { $ref: "#/components/schemas/DevClientType" } }
+        - name: availableWaitSeconds
+          in: query
+          required: false
+          description: Client's estimate of whole seconds left in the current wait (timing only; no command or content)
+          schema: { type: integer, minimum: 0, maximum: 3600 }
       responses:
-        "200": { description: "{ offer: SponsoredOfferCandidate | null }" }
+        "200": { description: "{ offer: SponsoredOfferCandidate | null }, including presentationMode (CARD | VIDEO) and creative (id, kind, url, posterUrl, mimeType, durationSeconds, width, height) or null" }
         "400": { description: invalid_request or client_type_required (neither sessionId nor clientType) }
         "403": { description: forbidden (session belongs to someone else) }
         "404": { description: developer_not_found }

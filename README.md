@@ -77,6 +77,12 @@ recorded in the same idempotent reward ledger with `rewardSource =
 DEVADS_BETA` and `campaignMode = BETA`. Beta Credits are not cash, cannot be
 redeemed and are never granted by sponsor campaigns.
 
+The beta also runs first-party **video** campaigns for DevAds-owned projects
+(Schema-Watch, web-harvester, The Scribe and DevAds itself): real 10, 15 and
+20 second creatives, delivered through the protocol and chosen to fit the
+developer's wait, with the reward tied to a server-verified action rather
+than to watching ([docs/beta-video-ads.md](./docs/beta-video-ads.md)).
+
 Sign-in uses Supabase Auth for the OAuth redirect only; the ad-server
 verifies the token with Supabase and issues its own DevAds session, so there
 is one identity for the web app and the VS Code extension (linked through the

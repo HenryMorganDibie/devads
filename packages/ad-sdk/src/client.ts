@@ -127,12 +127,17 @@ export class DevAdsClient {
     const query = validateRequest(SponsoredOfferRequestSchema, {
       clientType: context.clientType ?? this.defaults.clientType,
       sessionId: context.sessionId,
+      availableWaitSeconds: context.availableWaitSeconds,
     });
     if (!query.clientType && !query.sessionId) {
       throw new DevAdsError("invalid_request", "clientType or sessionId is required");
     }
     const res = await this.call(ROUTES.requestOffer.method, ROUTES.requestOffer.path(), SponsoredOfferResponseSchema, {
-      query: { clientType: query.clientType, sessionId: query.sessionId },
+      query: {
+        clientType: query.clientType,
+        sessionId: query.sessionId,
+        availableWaitSeconds: query.availableWaitSeconds === undefined ? undefined : String(query.availableWaitSeconds),
+      },
     });
     return res.offer;
   }

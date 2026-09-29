@@ -3,6 +3,8 @@ import type {
   ClientSponsorshipEventTypeSchema,
   DevClientTypeDTO,
   DevelopmentSessionDTO,
+  OfferCreative as OfferCreativeDTO,
+  PresentationMode as PresentationModeDTO,
   RedeemRewardResponse,
   RewardRedemptionDTO,
   RewardRedemptionListResponse,
@@ -29,6 +31,10 @@ export type DevClientType = DevClientTypeDTO;
 export type RewardType = RewardTypeDTO;
 
 export type DevelopmentSession = DevelopmentSessionDTO;
+/** How an offer is presented: CARD (text) or VIDEO (with a creative that fits the wait). */
+export type PresentationMode = PresentationModeDTO;
+/** A creative served with an offer; for VIDEO, never longer than the reported wait window. */
+export type OfferCreative = OfferCreativeDTO;
 /** A server-selected sponsored offer. `displayEventId` is the server-issued id every later event must reference. */
 export type SponsoredOpportunity = SponsoredOfferCandidate;
 /**
@@ -82,6 +88,11 @@ export interface OpportunityContext {
   /** When given, the server uses the session's client type. */
   sessionId?: string;
   clientType?: DevClientType;
+  /**
+   * Estimated seconds left in the current wait (whole seconds, 0-3600).
+   * Only this number is sent. Without it the server serves no video offer.
+   */
+  availableWaitSeconds?: number;
 }
 
 export interface OpportunityListFilter {

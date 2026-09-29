@@ -26,6 +26,12 @@ export type ProtocolClientProvider = () => ProtocolClient | null;
  */
 export interface WaitHandle {
   isActive(): boolean;
+  /**
+   * The host's estimate of whole seconds left in this wait, or undefined
+   * when it has no estimate. Only this number is sent to the server, which
+   * serves a video offer only when a creative fits it.
+   */
+  availableSeconds?(): number | undefined;
 }
 
 /**

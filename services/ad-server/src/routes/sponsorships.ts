@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Prisma, prisma, type DevelopmentSession } from "@devads/database";
 import {
+  MIN_VIDEO_WINDOW_SECONDS,
   resolveCarry,
   SponsoredOfferRequestSchema,
   SponsorshipEventRequestSchema,
@@ -14,6 +15,7 @@ import {
 } from "@devads/shared";
 import {
   developerRewardCapReached,
+  selectCreativeForWindow,
   selectSponsoredOffer,
   sponsorshipNotLiveReason,
   wouldExceedSponsorshipBudget,
@@ -26,6 +28,7 @@ import {
   loadRewardCounts,
   loadSponsorshipBudgetUsage,
   loadSponsorshipCandidates,
+  resolveCtaUrl,
   toSponsorshipCandidate,
 } from "../lib/sponsorshipCandidates.js";
 
@@ -176,6 +179,7 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         clientType,
         categoriesOptOut: developer.categoriesOptOut,
         betaMember: developer.betaJoinedAt !== null,
+        availableWaitSeconds: parsed.data.availableWaitSeconds,
       },
       displayHistory,
       budgetByCampaignId,
@@ -190,6 +194,13 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
     }
     const chosen = candidates.find((c) => c.offerId === winner.offerId)!;
     const offer = chosen.offer;
+    // VIDEO: the longest creative that fits the reported window. Eligibility
+    // already guaranteed one exists; this picks the same one deterministically.
+    const creative =
+      offer.presentationMode === "VIDEO"
+        ? selectCreativeForWindow(offer.creatives, parsed.data.availableWaitSeconds, MIN_VIDEO_WINDOW_SECONDS)
+        : null;
+    if (offer.presentationMode === "VIDEO" && !creative) return reply.send({ offer: null } satisfies SponsoredOfferResponse);
 
     const displayEventId = randomUUID();
     await prisma.sponsorshipEvent.create({
@@ -200,7 +211,10 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         campaignId: winner.campaignId,
         developerId: developer.id,
         sessionId,
-        metadata: { clientType },
+        creativeId: creative?.id ?? null,
+        metadata: creative
+          ? { clientType, availableWaitSeconds: parsed.data.availableWaitSeconds ?? null, creativeDurationSeconds: creative.durationSeconds }
+          : { clientType },
       },
     });
 
@@ -211,13 +225,30 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         campaignId: winner.campaignId,
         title: offer.title,
         description: offer.description,
-        ctaUrl: offer.ctaUrl,
+        ctaUrl: resolveCtaUrl(offer.ctaUrl, displayEventId),
         requiredAction: offer.requiredAction,
         rewardType: winner.rewardType as NonNullable<SponsoredOfferResponse["offer"]>["rewardType"],
         rewardAmountUnits: winner.rewardAmountUnits,
         expiresAt: offer.expiresAt ? offer.expiresAt.toISOString() : null,
         campaignMode: chosen.mode ?? "LIVE",
         minEngagementSeconds: chosen.minEngagementSeconds,
+        presentationMode: offer.presentationMode,
+        creative: creative
+          ? {
+              id: creative.id,
+              kind: creative.kind,
+              url: creative.url,
+              mimeType: creative.mimeType,
+              fallback:
+                creative.fallbackUrl && creative.fallbackMimeType
+                  ? { url: creative.fallbackUrl, mimeType: creative.fallbackMimeType }
+                  : null,
+              posterUrl: creative.posterUrl,
+              durationSeconds: creative.durationSeconds,
+              width: creative.width,
+              height: creative.height,
+            }
+          : null,
       },
     };
     return reply.send(response);

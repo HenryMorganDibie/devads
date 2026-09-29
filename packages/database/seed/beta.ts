@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seedBetaVideoCampaigns } from "./betaVideo.js";
 
 /**
  * The DevAds developer beta campaign. Safe to run against production: it
@@ -11,9 +12,9 @@ import { PrismaClient } from "@prisma/client";
  * verification, ledger and wallet infrastructure as LIVE sponsor campaigns;
  * only `mode: BETA` and the BETA_CREDITS reward type differ.
  */
-export const BETA_ADVERTISER_ID = "devads-beta";
-export const BETA_CAMPAIGN_ID = "devads-developer-beta";
-export const BETA_OFFER_ID = "devads-beta-offer-protocol";
+import { BETA_ADVERTISER_ID, BETA_CAMPAIGN_ID, BETA_OFFER_ID } from "./betaIds.js";
+
+export { BETA_ADVERTISER_ID, BETA_CAMPAIGN_ID, BETA_OFFER_ID };
 
 export async function seedBetaCampaign(prisma: PrismaClient, siteUrl: string) {
   const site = siteUrl.replace(/\/+$/, "");
@@ -84,7 +85,8 @@ if (isMain) {
     [process.env.BETA_SITE_URL, process.env.NEXT_PUBLIC_SITE_URL].map((v) => v?.trim()).find(Boolean) ??
     "https://devads-app.vercel.app";
   seedBetaCampaign(prisma, site)
-    .then(() => console.log(`DevAds beta campaign ready (${BETA_CAMPAIGN_ID}, offer links to ${site}/beta/opportunity)`))
+    .then(() => seedBetaVideoCampaigns(prisma, site))
+    .then(() => console.log(`DevAds beta campaigns ready (${BETA_CAMPAIGN_ID} + first-party video campaigns, site ${site})`))
     .catch((err) => {
       console.error(err);
       process.exitCode = 1;
