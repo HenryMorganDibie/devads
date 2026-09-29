@@ -73,6 +73,7 @@ export default function AdminCampaignsPage() {
           <h1 className="text-2xl font-semibold">Campaigns</h1>
           <nav className="flex items-center gap-4 text-sm text-muted">
             <Link href="/campaigns" className="text-white">Campaigns</Link>
+            <Link href="/sponsorships" className="hover:text-white">Sponsorships</Link>
             <Link href="/advertisers" className="hover:text-white">Advertisers</Link>
             <Link href="/overview" className="hover:text-white">Overview</Link>
           </nav>

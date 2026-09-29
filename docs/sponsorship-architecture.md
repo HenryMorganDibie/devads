@@ -149,6 +149,7 @@ completion transaction, so the two can't drift apart.
   gap for non-interactive agents.
 - **Dashboard UI** for sponsorship campaigns, the admin queue and the
   developer wallet. The endpoints exist. The Next.js apps don't call them yet.
+  *Developer pages added in Phase 4; sponsor and admin pages in Phase 5.*
 - **Separate sponsorship opt-in.** Phase 1 reuses `DeveloperProfile.adsEnabled`
   as the developer's single "show me sponsored content" switch.
 
@@ -423,3 +424,116 @@ the rewards page, rather than through the SDK (the SDK is built to
 `dist/` and isn't a web dependency). The page doesn't link to the
 sponsor's URL: opening an offer from the web isn't a tracked display and
 can't earn a reward.
+
+## Sponsor and admin dashboards (Phase 5)
+
+Phase 5 adds the Sponsorship UI to `apps/advertiser-dashboard` (sponsors)
+and `apps/admin-dashboard` (DevAds admins). It consumes only the routes
+Phase 1 already exposes. No server route, Prisma model, migration or SDK
+method was added, and the Ad Campaign pages keep their logic: the only
+changes to existing pages are a "Sponsorships" link in the advertiser
+Campaigns header and in the admin nav (Campaigns, Advertisers, Overview).
+Both apps' Tailwind `content` now also scans `components/`, as `apps/web`
+already did.
+
+The pages follow each app's existing pattern (client components, the
+stored session from `lib/api.ts` with a redirect to `/login`, the shared
+`apiGet`/`apiPost` helpers with the bearer token) and Phase 4's structure:
+loaders and pure helpers in `lib/sponsorships.ts` that never throw and check
+every response structurally, presentational views in `components/`, and
+thin pages in `app/`. Copy says "Sponsorship" and "Developer Reward" and
+keeps both apart from "Ad Campaign" (CPM, impressions).
+
+| App | Page | Files | Routes used |
+| --- | --- | --- | --- |
+| advertiser | `/sponsorships` (list) | `app/sponsorships/page.tsx`, `components/SponsorshipCampaignsView.tsx` | `GET /api/v1/sponsorship-campaigns?advertiserId=`, `POST .../:id/submit` |
+| advertiser | `/sponsorships/new` | `app/sponsorships/new/page.tsx`, `components/SponsorshipCampaignForm.tsx`, `components/SponsoredOfferFields.tsx` | `POST /api/v1/sponsorship-campaigns` (optional first offer inline) |
+| advertiser | `/sponsorships/[id]` | `app/sponsorships/[id]/page.tsx`, `components/SponsorshipCampaignDetail.tsx` | the list route, `POST .../:id/offers`, `POST .../:id/submit` |
+| admin | `/sponsorships` | `app/sponsorships/page.tsx`, `components/AdminSponsorshipsView.tsx` | `GET /api/v1/admin/sponsorship-campaigns`, `POST .../:id/approve \| reject \| pause` |
+
+**Sponsor create form.** The fields are exactly `CreateSponsorshipCampaignSchema`:
+name, sponsor category, objective, reward type, reward amount (whole
+units), charge per rewarded completion, total and daily budget, per-developer
+daily and lifetime reward caps, display frequency cap, eligible client types
+(none selected = all), start and end date, plus one optional inline offer
+(`SponsoredOfferInputSchema`: title, description, link, required action,
+expiry). The sponsor category is optional in the UI as well as the schema:
+it is labelled "(optional)", never `required`, and a blank value is omitted
+from the request. Every optional field left blank is omitted rather than
+sent as 0 or "". Currency is always USD (the schema default; the form has no
+currency picker). Money is typed in dollars and parsed to integer cents from
+its digits (no `parseFloat`), and all money and units are displayed from
+integer digits. Campaigns are saved as DRAFT and submitted from the list or
+detail page.
+
+**Sponsor list and detail.** Every status (DRAFT, SUBMITTED, APPROVED,
+REJECTED, PAUSED, ARCHIVED) is shown, with the rejection reason. A draft can
+be submitted once it has an active offer (the button is disabled with an
+explanation otherwise, matching the server's
+`campaign_needs_at_least_one_offer`). Offers can be added while the campaign
+is a draft. Performance shows the stats the list route returns (displays,
+completions, rewards granted, spend) and an integer reconciliation: rewards
+granted x charge per completion vs. actual spend, with the difference
+explained as completions rewarded after the budget ran out (the server's
+soft cap still rewards the developer but skips the charge), and total
+budget remaining. When a campaign has several active offers, the page says
+that only the oldest active, unexpired offer is served at a time
+(`loadSponsorshipCandidates`).
+
+**Admin review.** A separate "Sponsorships" page with its own queue
+(SUBMITTED, oldest submission first) next to, not merged into, the Ad
+Campaign queue. Each queued campaign shows the advertiser id, category (or
+"not specified"), objective, reward, sponsor charge, budgets, caps, client
+types, dates and every offer (title, description, link, required action,
+expiry). Approve, reject (reason required, 1-500 characters, as the server
+validates) and pause (APPROVED only, with a confirm that there is no resume)
+use the existing admin routes. All other campaigns are listed with status
+and rejection reason.
+
+Every view handles loading, expired session (sign-in link), request /
+network / malformed-response errors (message plus retry) and empty states.
+Tests: `apps/advertiser-dashboard/__tests__` and
+`apps/admin-dashboard/__tests__`, vitest with views rendered by
+`react-dom/server` (no DOM library), configured exactly like `apps/web`.
+
+What sponsors and admins can do today vs. what is gapped:
+
+| Capability | Status |
+| --- | --- |
+| Sponsor: create a campaign (with an optional first offer) | Available |
+| Sponsor: add offers to a draft | Available |
+| Sponsor: submit DRAFT -> SUBMITTED | Available |
+| Sponsor: list campaigns with status and whole-campaign stats | Available |
+| Sponsor: edit a draft campaign | Route exists (`PATCH /api/v1/sponsorship-campaigns/:id`); no UI yet |
+| Sponsor: edit, deactivate or remove an offer | **Gap.** No route; offers can only be added, and only in DRAFT |
+| Sponsor: withdraw, archive, pause or resume a campaign | **Gap.** No sponsor route; ARCHIVED has no writer at all |
+| Sponsor: fetch one campaign | **Gap (worked around read-only).** No `GET /sponsorship-campaigns/:id`; the detail page reads the list and picks the campaign |
+| Sponsor: per-day spend, daily budget usage, per-offer stats, time series | **Gap.** Stats are whole-campaign totals only |
+| Admin: SUBMITTED queue, approve, reject, pause | Available |
+| Admin: resume a paused campaign, archive | **Gap.** No route |
+| Admin: advertiser name on a sponsorship campaign | **Gap.** The admin DTO has only `advertiserId` |
+| Admin: campaign stats (displays, completions, spend) | **Gap.** Only the sponsor list route computes `stats`; the admin list doesn't |
+| Admin: inspect `SponsorshipEvent` rows (displays, skips, opens, completions per developer/offer) | **Gap.** No admin read route |
+| Admin: inspect `DeveloperRewardLedger` rows (rewards granted per developer/campaign) | **Gap.** No admin read route |
+
+Known gaps (not patched in this phase):
+
+- **No admin read route for sponsorship activity.** Fraud and abuse review
+  needs a read-only, `requireAdmin` endpoint over `SponsorshipEvent` and
+  `DeveloperRewardLedger`, for example
+  `GET /api/v1/admin/sponsorship-campaigns/:id/events` and
+  `GET /api/v1/admin/sponsorship-campaigns/:id/rewards` (or a single
+  filterable `GET /api/v1/admin/sponsorship-activity?campaignId=&developerId=`),
+  paginated, returning coarse fields only (type, offer, developer id,
+  session id, timestamps, reward amount and status; no event metadata
+  beyond what the server already stores). It would be a pure read like the
+  offer listing: no writes, no cap or spend changes. The admin page states
+  that this isn't available instead of showing anything partial.
+- **Admin campaign stats and advertiser name.** Adding the sponsor list's
+  `stats` block and the advertiser's name to the admin list response (read
+  only) would let reviewers see spend and who the sponsor is.
+- **Sponsor lifecycle.** Offer edit/deactivate, sponsor-side
+  withdraw/archive/pause and admin resume/archive are all mutations and need
+  routes before any UI can offer them.
+- **Reporting.** No per-day or per-offer breakdown and no daily budget
+  usage is exposed, so the dashboards only show campaign totals.

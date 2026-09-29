@@ -50,6 +50,7 @@ export default function AdvertisersPage() {
         <h1 className="text-2xl font-semibold">Advertisers</h1>
         <nav className="flex items-center gap-4 text-sm text-muted">
           <Link href="/campaigns" className="hover:text-white">Campaigns</Link>
+          <Link href="/sponsorships" className="hover:text-white">Sponsorships</Link>
           <Link href="/advertisers" className="text-white">Advertisers</Link>
           <Link href="/overview" className="hover:text-white">Overview</Link>
         </nav>

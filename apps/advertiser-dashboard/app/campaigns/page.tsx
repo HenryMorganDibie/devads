@@ -58,6 +58,9 @@ export default function CampaignsPage() {
       <div className="flex items-center justify-between mb-10">
         <h1 className="text-2xl font-semibold">Campaigns</h1>
         <div className="flex gap-3">
+          <Link href="/sponsorships" className="text-sm text-muted hover:text-white self-center">
+            Sponsorships
+          </Link>
           <Link href="/campaigns/new" className="btn-primary text-sm">
             New campaign
           </Link>
