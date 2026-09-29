@@ -21,6 +21,8 @@ export const DevClientTypeSchema = z.enum([
   "CUSTOM_AGENT",
   "LOCAL_AGENT",
   "OTHER",
+  // The DevAds web app acting as a first-party client (developer beta).
+  "WEB",
 ]);
 export type DevClientTypeDTO = z.infer<typeof DevClientTypeSchema>;
 
@@ -55,8 +57,22 @@ export const RewardTypeSchema = z.enum([
   "DISCOUNT",
   "SUBSCRIPTION_CREDIT",
   "OTHER",
+  // DevAds-funded developer beta credits: not cash, not redeemable, never
+  // sponsor-funded. Only BETA campaigns grant them.
+  "BETA_CREDITS",
 ]);
 export type RewardTypeDTO = z.infer<typeof RewardTypeSchema>;
+
+/** LIVE: funded by an external sponsor. BETA: the DevAds-funded developer beta. */
+export const CampaignModeSchema = z.enum(["LIVE", "BETA"]);
+export type CampaignModeDTO = z.infer<typeof CampaignModeSchema>;
+
+/** Who funded an earned reward. */
+export const RewardSourceSchema = z.enum(["SPONSOR", "DEVADS_BETA"]);
+export type RewardSourceDTO = z.infer<typeof RewardSourceSchema>;
+
+/** Seconds a developer must engage with an opened offer before completing (0 to 1 hour). */
+export const MinEngagementSecondsSchema = z.number().int().min(0).max(3600);
 
 export const SponsorshipEventTypeSchema = z.enum([
   "OFFER_REQUESTED",
@@ -129,6 +145,10 @@ export const SponsoredOfferCandidateSchema = z.object({
   rewardType: RewardTypeSchema,
   rewardAmountUnits: z.number().int().nonnegative(),
   expiresAt: z.string().nullable(),
+  /** BETA offers must be presented as DevAds beta opportunities, never as sponsor-funded. */
+  campaignMode: CampaignModeSchema.optional(),
+  /** When present, a completion only qualifies this many seconds after OFFER_OPENED. */
+  minEngagementSeconds: MinEngagementSecondsSchema.nullable().optional(),
 });
 export type SponsoredOfferCandidate = z.infer<typeof SponsoredOfferCandidateSchema>;
 
@@ -211,6 +231,9 @@ export const RewardLedgerEntryDTOSchema = z.object({
   entryType: RewardLedgerEntryTypeSchema,
   amountUnits: z.number().int(),
   status: RewardStatusSchema,
+  /** On EARNED entries: who funded the reward and the campaign's mode when granted. */
+  rewardSource: RewardSourceSchema.nullable().optional(),
+  campaignMode: CampaignModeSchema.nullable().optional(),
   createdAt: z.string(),
 });
 
@@ -324,18 +347,27 @@ const SponsorshipCampaignFieldsSchema = z.object({
   developerDailyCap: z.number().int().positive().nullable().optional(),
   developerLifetimeCap: z.number().int().positive().nullable().optional(),
   frequencyCapPerDay: z.number().int().positive().nullable().optional(),
+  minEngagementSeconds: MinEngagementSecondsSchema.nullable().optional(),
   eligibleClientTypes: z.array(DevClientTypeSchema).default([]),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().nullable().optional(),
 });
 
+// Sponsor-created campaigns are always LIVE: there is deliberately no `mode`
+// field here, and beta credits cannot be granted by a sponsor. BETA campaigns
+// are created by the DevAds operator (see packages/database/seed/beta.ts).
+const notBetaCredits = (v: { rewardType?: string }) => v.rewardType !== "BETA_CREDITS";
+const notBetaCreditsIssue = { message: "BETA_CREDITS are only granted by DevAds beta campaigns", path: ["rewardType"] };
+
 export const CreateSponsorshipCampaignSchema = SponsorshipCampaignFieldsSchema.extend({
   advertiserId: z.string().min(1),
   offers: z.array(SponsoredOfferInputSchema).max(20).optional(),
-}).refine((v) => !v.startDate || !v.endDate || v.endDate > v.startDate, {
-  message: "endDate must be after startDate",
-  path: ["endDate"],
-});
+})
+  .refine((v) => !v.startDate || !v.endDate || v.endDate > v.startDate, {
+    message: "endDate must be after startDate",
+    path: ["endDate"],
+  })
+  .refine(notBetaCredits, notBetaCreditsIssue);
 export type CreateSponsorshipCampaignInput = z.infer<typeof CreateSponsorshipCampaignSchema>;
 
 export const UpdateSponsorshipCampaignSchema = SponsorshipCampaignFieldsSchema.partial()
@@ -343,7 +375,8 @@ export const UpdateSponsorshipCampaignSchema = SponsorshipCampaignFieldsSchema.p
   .refine((v) => !v.startDate || !v.endDate || v.endDate > v.startDate, {
     message: "endDate must be after startDate",
     path: ["endDate"],
-  });
+  })
+  .refine(notBetaCredits, notBetaCreditsIssue);
 export type UpdateSponsorshipCampaignInput = z.infer<typeof UpdateSponsorshipCampaignSchema>;
 
 export const SponsoredOfferDTOSchema = z.object({
@@ -381,6 +414,8 @@ export const SponsorshipCampaignDTOSchema = z.object({
   developerDailyCap: z.number().int().nullable(),
   developerLifetimeCap: z.number().int().nullable(),
   frequencyCapPerDay: z.number().int().nullable(),
+  mode: CampaignModeSchema.optional(),
+  minEngagementSeconds: z.number().int().nullable().optional(),
   eligibleClientTypes: z.array(DevClientTypeSchema),
   startDate: z.string(),
   endDate: z.string().nullable(),

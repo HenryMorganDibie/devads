@@ -2,7 +2,7 @@
 
 **The sponsorship infrastructure for AI-powered development.**
 
-**Website: [devads-app.vercel.app](https://devads-app.vercel.app)**
+**Website: [devads-app.vercel.app](https://devads-app.vercel.app)** · **Now in developer beta:** [join with GitHub or Google](https://devads-app.vercel.app/join)
 
 [![The DevAds website hero: "Build with AI. Get sponsored." beside a diagram of sponsor funding flowing through DevAds to a developer's reward](docs/screenshots/01-hero.jpg)](https://devads-app.vercel.app)
 
@@ -59,10 +59,30 @@ the list; see the note in [docs/developer-guide.md](./docs/developer-guide.md).)
 
 | | What |
 | --- | --- |
-| **Implemented** | Sponsorship campaigns with sponsor and admin review; server-side offer selection, targeting, budgets, caps and verification; idempotent sponsor charges in integer cents; reward ledger and developer wallet; `@devads/ad-sdk` protocol SDK and adapter runtime; sponsor, admin and developer dashboards; the VS Code extension (the only client), including wait-time sponsored cards with CPM campaigns, developer earnings and payouts |
+| **Developer beta** | Public and usable: GitHub or Google sign-in, beta onboarding, a developer dashboard, and a DevAds-funded beta campaign whose Beta Credits are verified on the server and recorded in the wallet. There are no external sponsors yet ([docs/developer-beta.md](./docs/developer-beta.md)) |
+| **Implemented** | Sponsorship campaigns with sponsor and admin review; server-side offer selection, targeting, budgets, caps and verification; idempotent sponsor charges in integer cents; reward ledger and developer wallet; `@devads/ad-sdk` protocol SDK and adapter runtime; sponsor, admin and developer dashboards; the VS Code extension and the DevAds web app (the two clients), including wait-time sponsored cards with CPM campaigns, developer earnings and payouts |
 | **Early** | Reward redemption, fulfilled by an operator ([docs/redemption.md](./docs/redemption.md)); Stripe billing and payouts, intended for test-mode keys and only used when configured; the hosted public API (the site is live, the API is not yet) |
 | **Planned** | Adapters for AI coding agents, CLIs and other IDEs ([docs/adapters.md](./docs/adapters.md) lists what each would legitimately require); automated fraud detection and reward reversals; automatic delivery of more reward types |
 | **Partnerships** | **None.** DevAds has no partnership with Anthropic, OpenAI, Google, Cursor or any other AI or developer-tool company, and none is needed: the whole loop runs on infrastructure DevAds controls. Client types such as `CLAUDE_CODE` or `CURSOR` are labels a sponsor may target, not integrations. |
+
+## Developer beta
+
+DevAds runs a public developer beta while it has no external sponsors. A
+developer signs in with GitHub or Google on
+[/join](https://devads-app.vercel.app/join), accepts the beta terms, opts in,
+and completes a **DevAds Beta Opportunity**: a campaign owned and funded by
+DevAds, whose qualifying action (a walkthrough of how sponsored developer
+experiences work) is verified on the server. The reward is **Beta Credits**,
+recorded in the same idempotent reward ledger with `rewardSource =
+DEVADS_BETA` and `campaignMode = BETA`. Beta Credits are not cash, cannot be
+redeemed and are never granted by sponsor campaigns.
+
+Sign-in uses Supabase Auth for the OAuth redirect only; the ad-server
+verifies the token with Supabase and issues its own DevAds session, so there
+is one identity for the web app and the VS Code extension (linked through the
+existing device pairing). Setup, the security model and the operator steps
+(OAuth apps, Supabase redirect URLs, environment variables) are in
+[docs/developer-beta.md](./docs/developer-beta.md).
 
 ## Try the sponsorship loop
 
@@ -347,6 +367,14 @@ production; other branches get preview deployments.
   project; it is not live until its database and secret environment
   variables are configured, so sign-up and sign-in on the public site do
   not work yet.
+- Developer beta sign-in additionally needs `NEXT_PUBLIC_SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` on the web project,
+  `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` on the API, and GitHub and
+  Google enabled in Supabase Auth with
+  `https://devads-app.vercel.app/auth/callback` as an allowed redirect. See
+  [docs/developer-beta.md](./docs/developer-beta.md#setup-operator).
+- The web project builds through `apps/web/vercel.json` (turbo), so the
+  workspace packages it imports are compiled first.
 
 ## VS Code extension
 

@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       // Signed-in and auth pages have nothing to index.
-      disallow: ["/dashboard", "/rewards", "/sponsorships", "/device", "/login", "/signup"],
+      disallow: ["/dashboard", "/rewards", "/sponsorships", "/device", "/login", "/signup", "/app", "/auth", "/beta/opportunity"],
     },
     ...(SITE.url ? { sitemap: `${SITE.url}/sitemap.xml`, host: SITE.url } : {}),
   };

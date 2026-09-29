@@ -22,6 +22,7 @@ export const REWARD_TYPES = [
   "DISCOUNT",
   "SUBSCRIPTION_CREDIT",
   "OTHER",
+  "BETA_CREDITS",
 ] as const;
 export type RewardType = (typeof REWARD_TYPES)[number];
 
@@ -47,6 +48,8 @@ export interface RewardLedgerEntry {
   amountUnits: number;
   status: RewardStatus;
   createdAt: string;
+  /** Who funded an EARNED entry: a sponsor, or DevAds itself during the developer beta. */
+  rewardSource?: "SPONSOR" | "DEVADS_BETA" | null;
 }
 
 export interface RewardWalletResponse {
@@ -72,6 +75,7 @@ const REWARD_LABELS: Record<RewardType, string> = {
   DISCOUNT: "Discount",
   SUBSCRIPTION_CREDIT: "Subscription Credit",
   OTHER: "Other Reward",
+  BETA_CREDITS: "Beta Credits",
 };
 
 export function rewardTypeLabel(type: string): string {

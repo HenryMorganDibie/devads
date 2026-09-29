@@ -3,8 +3,8 @@ import { LINKS } from "../../lib/site";
 import { ArrowRight, Container } from "./primitives";
 
 const PATHS = [
-  { side: "Developers", label: "Join as a developer", href: LINKS.signUp, color: "#62dfa8", note: "Opt in and receive rewards while you build." },
-  { side: "Sponsors", label: "Sponsor developers", href: LINKS.sponsor, color: "#f0b35b", note: "Fund value for the developers you want to reach." },
+  { side: "Developers", label: "Join the Developer Beta", href: LINKS.signUp, color: "#62dfa8", note: "Sign in with GitHub or Google and try the full loop." },
+  { side: "Sponsors", label: "Become a Sponsor", href: LINKS.sponsor, color: "#f0b35b", note: "Fund value for the developers you want to reach." },
   { side: "Platforms", label: "Build an integration", href: LINKS.docs ?? "#protocol", color: "#7ea6ff", note: "Bring sponsorships into your developer tool." },
 ];
 

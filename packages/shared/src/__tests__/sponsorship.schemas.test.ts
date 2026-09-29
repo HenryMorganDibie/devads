@@ -34,12 +34,30 @@ describe("sponsorship schemas", () => {
     }
   });
 
-  it("accepts every reward type with every objective (independent dimensions)", () => {
-    for (const rewardType of RewardTypeSchema.options) {
+  it("accepts every sponsor-grantable reward type with every objective (independent dimensions)", () => {
+    for (const rewardType of RewardTypeSchema.options.filter((t) => t !== "BETA_CREDITS")) {
       for (const objective of ["AWARENESS", "QUALIFIED_ENGAGEMENT", "PRODUCT_DISCOVERY", "TRIAL_ACTIVATION", "OTHER"]) {
         expect(CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, rewardType, objective }).success).toBe(true);
       }
     }
+  });
+
+  it("never lets a sponsor grant DevAds beta credits or create a BETA campaign", () => {
+    const create = CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, rewardType: "BETA_CREDITS" });
+    expect(create.success).toBe(false);
+    expect(UpdateSponsorshipCampaignSchema.safeParse({ rewardType: "BETA_CREDITS" }).success).toBe(false);
+
+    // `mode` is not a sponsor input: it is stripped, so the campaign stays LIVE.
+    const withMode = CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, mode: "BETA" });
+    expect(withMode.success).toBe(true);
+    expect(withMode.success && "mode" in withMode.data).toBe(false);
+  });
+
+  it("bounds the minimum engagement time", () => {
+    expect(CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, minEngagementSeconds: 10 }).success).toBe(true);
+    expect(CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, minEngagementSeconds: -1 }).success).toBe(false);
+    expect(CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, minEngagementSeconds: 3601 }).success).toBe(false);
+    expect(CreateSponsorshipCampaignSchema.safeParse({ ...baseCampaign, minEngagementSeconds: 1.5 }).success).toBe(false);
   });
 
   it("rejects non-integer money and reward amounts", () => {

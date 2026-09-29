@@ -32,6 +32,7 @@ export function toSponsorshipCandidate(c: SponsorshipCampaign, offer: SponsoredO
     developerDailyCap: c.developerDailyCap,
     developerLifetimeCap: c.developerLifetimeCap,
     frequencyCapPerDay: c.frequencyCapPerDay,
+    mode: c.mode,
   };
 }
 
@@ -41,7 +42,7 @@ export function toSponsorshipCandidate(c: SponsorshipCampaign, offer: SponsoredO
  */
 export async function loadSponsorshipCandidates(
   now: Date
-): Promise<Array<SponsorshipCandidate & { offer: SponsoredOffer }>> {
+): Promise<Array<SponsorshipCandidate & { offer: SponsoredOffer; minEngagementSeconds: number | null }>> {
   const campaigns = await prisma.sponsorshipCampaign.findMany({
     where: { status: "APPROVED" },
     include: {
@@ -55,7 +56,11 @@ export async function loadSponsorshipCandidates(
   });
   return campaigns
     .filter((c) => c.offers.length > 0)
-    .map((c) => ({ ...toSponsorshipCandidate(c, c.offers[0]), offer: c.offers[0] }));
+    .map((c) => ({
+      ...toSponsorshipCandidate(c, c.offers[0]),
+      offer: c.offers[0],
+      minEngagementSeconds: c.minEngagementSeconds,
+    }));
 }
 
 export async function loadSponsorshipBudgetUsage(

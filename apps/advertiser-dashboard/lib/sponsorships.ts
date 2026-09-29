@@ -45,6 +45,8 @@ export const REWARD_TYPES = [
   "DISCOUNT",
   "SUBSCRIPTION_CREDIT",
   "OTHER",
+  // BETA_CREDITS is deliberately absent: only DevAds beta campaigns grant
+  // them, and the API rejects them in sponsor-created campaigns.
 ] as const;
 export type RewardType = (typeof REWARD_TYPES)[number];
 
@@ -59,6 +61,7 @@ export const DEV_CLIENT_TYPES = [
   "CUSTOM_AGENT",
   "LOCAL_AGENT",
   "OTHER",
+  "WEB",
 ] as const;
 export type DevClientType = (typeof DEV_CLIENT_TYPES)[number];
 
@@ -104,6 +107,7 @@ const CLIENT_LABELS: Record<DevClientType, string> = {
   CUSTOM_AGENT: "Custom agents",
   LOCAL_AGENT: "Local agents",
   OTHER: "Other tools",
+  WEB: "DevAds web",
 };
 
 export function statusLabel(s: SponsorshipStatus): string {

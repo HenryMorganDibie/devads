@@ -99,6 +99,68 @@ paths:
         "400": { description: invalid_or_expired_code }
         "401": { description: No session }
 
+  /api/v1/auth/oauth/exchange:
+    post:
+      summary: Exchange a Supabase (GitHub/Google OAuth) access token for a DevAds developer session
+      description: >
+        The token is verified by asking Supabase who it belongs to; the stable
+        identity is the Supabase user id. Accounts are never linked by email.
+        Creates a DEVELOPER account (sponsorships off) on first sign-in.
+        Rate limited to 10/minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessToken]
+              properties:
+                accessToken: { type: string, minLength: 20, maxLength: 8192 }
+      responses:
+        "200": { description: "{ token, userId, developerId, created }" }
+        "400": { description: invalid_request | oauth_email_required }
+        "401": { description: invalid_oauth_token }
+        "403": { description: oauth_provider_not_allowed | not_a_developer_account }
+        "409": { description: email_in_use_by_another_account }
+        "429": { description: Rate limited }
+        "502": { description: identity_provider_unavailable }
+        "503": { description: oauth_not_configured }
+
+  /api/v1/me/developer:
+    get:
+      summary: The signed-in developer's profile, beta status and connected clients
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: DeveloperMeResponse }
+        "401": { description: No session }
+
+  /api/v1/me/beta:
+    post:
+      summary: Join the developer beta by accepting the current beta terms (idempotent)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptTerms, termsVersion]
+              properties:
+                acceptTerms: { type: boolean, enum: [true] }
+                termsVersion: { type: string, description: Must equal the current terms version }
+      responses:
+        "200": { description: DeveloperMeResponse }
+        "400": { description: invalid_request }
+        "401": { description: No session }
+
+  /api/v1/me/sponsorship-history:
+    get:
+      summary: The signed-in developer's 30 most recent sponsorship events
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: SponsorshipHistoryResponse }
+        "401": { description: No session }
+
   /api/v1/ads/select:
     post:
       summary: Server-authoritative ad selection for the current context
@@ -360,6 +422,12 @@ paths:
   # --- Developer sponsorship: sessions, offers, events, wallet ---------------
 
   /api/v1/sessions:
+    get:
+      summary: The signed-in developer's 25 most recent development sessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: DevelopmentSessionListResponse }
+        "401": { description: No session }
     post:
       summary: Start a development session for the signed-in developer (coarse metadata only)
       security: [{ bearerAuth: [] }]
@@ -706,8 +774,10 @@ components:
       type: string
       description: >
         A label for the client a developer is using. Listing a value is not a
-        claim of integration; only VS_CODE has a DevAds adapter (see adapters.md).
-      enum: [VS_CODE, CLAUDE_CODE, CODEX, GEMINI, CURSOR, OPENCODE, AIDER, CUSTOM_AGENT, LOCAL_AGENT, OTHER]
+        claim of integration; only VS_CODE and WEB (the DevAds web app) are
+        DevAds clients (see adapters.md).
+      enum: [VS_CODE, CLAUDE_CODE, CODEX, GEMINI, CURSOR, OPENCODE, AIDER, CUSTOM_AGENT, LOCAL_AGENT, OTHER, WEB]
     RewardType:
       type: string
-      enum: [AI_CREDITS, API_CREDITS, COMPUTE_CREDITS, TOOL_CREDITS, CASH, DISCOUNT, SUBSCRIPTION_CREDIT, OTHER]
+      description: BETA_CREDITS are granted only by DevAds beta campaigns, are not cash and are never redeemable.
+      enum: [AI_CREDITS, API_CREDITS, COMPUTE_CREDITS, TOOL_CREDITS, CASH, DISCOUNT, SUBSCRIPTION_CREDIT, OTHER, BETA_CREDITS]

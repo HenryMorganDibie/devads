@@ -7,7 +7,8 @@ machine-readable spec: [openapi.yaml](./openapi.yaml).
 
 | Prefix | Purpose |
 |---|---|
-| `/api/v1/auth/*` | Developer/advertiser signup+login, admin login, device-pairing (VS Code sign-in) |
+| `/api/v1/auth/*` | Developer/advertiser signup+login, admin login, device-pairing (VS Code sign-in), OAuth token exchange for the developer beta |
+| `/api/v1/me/*` | The signed-in developer's profile, beta membership and sponsorship history ([developer-beta.md](./developer-beta.md)) |
 | `/api/v1/ads/select` | Server-authoritative ad selection (called by clients) |
 | `/api/v1/events` | Idempotent impression/click/dismiss/view-complete reporting |
 | `/api/v1/earnings` | Developer earnings rollup + payout requests |

@@ -13,6 +13,8 @@ import { registerSponsorshipCampaignRoutes } from "./routes/sponsorshipCampaigns
 import { registerSponsorshipOfferListingRoutes } from "./routes/sponsorshipOffers.js";
 import { registerSponsorshipAdminActivityRoutes } from "./routes/sponsorshipAdminActivity.js";
 import { registerRedemptionRoutes } from "./routes/redemptions.js";
+import { registerBetaRoutes } from "./routes/beta.js";
+import { identityVerifierFromEnv, type IdentityVerifier } from "./lib/identity.js";
 import { attachSession } from "./lib/authGuard.js";
 import { createRedemptionProvider, type RedemptionProvider } from "@devads/shared";
 
@@ -38,6 +40,11 @@ export interface BuildAppOptions {
    * "mock"); unset means redemption is disabled. null disables explicitly.
    */
   redemptionProvider?: RedemptionProvider | null;
+  /**
+   * Verifies OAuth (Supabase Auth) access tokens for developer sign-in.
+   * Defaults to SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY; null disables OAuth.
+   */
+  identityVerifier?: IdentityVerifier | null;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -68,6 +75,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       options.redemptionProvider !== undefined
         ? options.redemptionProvider
         : createRedemptionProvider(process.env.REDEMPTION_PROVIDER),
+  });
+
+  await registerBetaRoutes(app, {
+    identityVerifier: options.identityVerifier !== undefined ? options.identityVerifier : identityVerifierFromEnv(),
   });
 
   return app;

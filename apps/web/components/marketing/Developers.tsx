@@ -101,7 +101,7 @@ export function Developers() {
             </ul>
 
             <Link href={LINKS.signUp} className="mk-btn mk-btn-primary mt-10">
-              Join as a developer <ArrowRight />
+              Join the Developer Beta <ArrowRight />
             </Link>
           </div>
 

@@ -12,7 +12,8 @@
     "migrate:dev": "prisma migrate dev",
     "seed": "tsx seed/index.ts",
     "test": "echo \"no unit tests in database package\" && exit 0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "seed:beta": "tsx seed/beta.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0"

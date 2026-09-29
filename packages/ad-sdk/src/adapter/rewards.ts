@@ -9,6 +9,7 @@ const REWARD_LABELS: Record<RewardType, string> = {
   DISCOUNT: "discount",
   SUBSCRIPTION_CREDIT: "subscription credit",
   OTHER: "other reward",
+  BETA_CREDITS: "DevAds beta credits",
 };
 
 export function rewardLabel(type: RewardType): string {
