@@ -4,6 +4,8 @@
 
 **Website: [devads-app.vercel.app](https://devads-app.vercel.app)**
 
+[![The DevAds website hero: "Build with AI. Get sponsored." beside a diagram of sponsor funding flowing through DevAds to a developer's reward](docs/screenshots/01-hero.jpg)](https://devads-app.vercel.app)
+
 Companies sponsor developers. Developers receive value. DevAds powers the
 exchange. The first product built on it is a developer advertising network:
 
@@ -39,6 +41,117 @@ $ npm run build
 
 *(Static mockup of the VS Code status-bar card -- a real recording is on
 the list; see the note in [docs/developer-guide.md](./docs/developer-guide.md).)*
+
+## The website
+
+[devads-app.vercel.app](https://devads-app.vercel.app) tells the DevAds
+story from top to bottom. The diagrams use three colors consistently:
+**amber** for sponsor funding, **mint** for developer value and **blue**
+for verified engagement. Every product preview on the site is labelled
+*Conceptual preview* or *Illustrative example*; none of the figures are
+real customers or results. Screenshots are of the production build at
+1440px wide unless noted.
+
+### Try it: a sponsored opportunity, step by step
+
+The hero includes a fictional opportunity card. Pressing it plays through
+what DevAds does between the sponsor and the developer.
+
+| 1. The developer sees an offer | 2. DevAds verifies the engagement | 3. The reward lands in the wallet |
+| :---: | :---: | :---: |
+| ![Opportunity card offering $20 developer credits with a View opportunity button](docs/screenshots/step-1-opportunity.jpg) | ![The same card showing Verifying engagement](docs/screenshots/step-2-verifying.jpg) | ![The same card showing Added to wallet](docs/screenshots/step-3-rewarded.jpg) |
+
+In the sponsor section, choosing an objective updates the campaign preview
+(here, *Event registration* turns the outcome metric into *Registrations*):
+
+![Sponsor dashboard preview with Event registration selected](docs/screenshots/step-4-objective.jpg)
+
+### Page by page
+
+**1. The shift.** AI changed how developers build, and what building
+costs.
+
+![The problem section: a modern developer's recurring stack of AI agents, model APIs, cloud and tools](docs/screenshots/02-problem.jpg)
+
+**2. A new model.** Don't just advertise to developers; sponsor them.
+
+![Traditional advertising compared with DevAds sponsorship](docs/screenshots/03-new-model.jpg)
+
+**3. The economic loop.** Six steps from a funded campaign to the platform
+fee. The loop advances on its own and each step can be selected.
+
+![The six-step economic loop](docs/screenshots/04-economic-loop.jpg)
+
+**4. For developers.** The rewards developers can receive, with a
+conceptual wallet.
+
+![Developer rewards and the conceptual DevAds wallet](docs/screenshots/05-developers.jpg)
+
+**5. Developer privacy.** What stays in the developer's session, and the
+coarse, allowlisted metadata a sponsorship event carries.
+
+![Privacy boundary between the developer's session and a sponsorship event](docs/screenshots/06-privacy.jpg)
+
+**6. For sponsors.** A conceptual campaign dashboard, sponsor objectives,
+and the categories of organizations that can sponsor.
+
+![Sponsor dashboard preview, objectives and sponsor categories](docs/screenshots/07-sponsors.jpg)
+
+**7. For platforms.** How developer tools can bring sponsorships into their
+own experiences.
+
+![Potential integrations converging on the DevAds Protocol](docs/screenshots/08-platforms.jpg)
+
+**8. The protocol.** Real `@devads/ad-sdk` calls, and the stack from
+clients to sponsors. VS Code is the only client connected today.
+
+![Protocol section with SDK code and the client-to-sponsor stack](docs/screenshots/09-protocol.jpg)
+
+**9. Why DevAds.** Four principles: developer controlled, sponsor funded,
+outcome focused, platform ready.
+
+![The four principles](docs/screenshots/10-principles.jpg)
+
+**10. From impression to value.** Each line lights up as it scrolls into
+view.
+
+![Impressions are easy to buy; developer value is even more powerful](docs/screenshots/11-crescendo.jpg)
+
+**11. Imagine this.** An illustrative campaign from funding to platform
+fee.
+
+![Illustrative six-step example of a cloud company's sponsorship](docs/screenshots/12-example.jpg)
+
+**12. Infrastructure.** What sits under the simple experience the developer
+sees.
+
+![Infrastructure layers from sponsors to accounting](docs/screenshots/13-infrastructure.jpg)
+
+**13. Business model.** Developers get rewards, sponsors get qualified
+engagement, DevAds gets platform fees.
+
+![Everyone gets something: the business model](docs/screenshots/14-business-model.jpg)
+
+**14. FAQ.**
+
+![Frequently asked questions](docs/screenshots/15-faq.jpg)
+
+**15. Get started.** One path each for developers, sponsors and platforms.
+
+![Final call to action with three paths](docs/screenshots/16-cta.jpg)
+
+![Site footer](docs/screenshots/17-footer.jpg)
+
+### On mobile
+
+The layout is designed for phones rather than shrunk from desktop
+(captured at 390px).
+
+<p>
+  <img src="docs/screenshots/mobile-hero.jpg" alt="Mobile hero" width="300">
+  &nbsp;
+  <img src="docs/screenshots/mobile-developers.jpg" alt="Mobile developer section" width="300">
+</p>
 
 ## How it works
 
