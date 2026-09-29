@@ -1,8 +1,11 @@
 # DevAds
 
-**Turn developer wait time into value.**
+**The sponsorship infrastructure for AI-powered development.**
 
-DevAds is a developer advertising network:
+**Website: [devads-app.vercel.app](https://devads-app.vercel.app)**
+
+Companies sponsor developers. Developers receive value. DevAds powers the
+exchange. The first product built on it is a developer advertising network:
 
 - **Developers** install a VS Code extension, opt in, and earn a revenue
   share from small, tasteful sponsored cards shown only during wait time
@@ -65,7 +68,7 @@ code, file contents, environment variables, or secrets. Full detail:
 
 ```
 apps/
-  web/                    Landing page + developer dashboard (Next.js)
+  web/                    Public site (devads-app.vercel.app) + developer dashboard (Next.js)
   advertiser-dashboard/   Campaign creation & management (Next.js)
   admin-dashboard/        Approval queue, platform analytics (Next.js)
   vscode-extension/       The VS Code extension itself
@@ -118,6 +121,23 @@ Seeded logins:
 | Admin | admin@devads.dev | admin12345 |
 | Developer | dev@devads.dev | dev12345 |
 | Advertiser | advertiser@devads.dev | advertiser12345 |
+
+## Deployment
+
+The public site is `apps/web`, deployed on Vercel as the `devads` project
+and served at **https://devads-app.vercel.app**. Pushes to `main` deploy to
+production; other branches get preview deployments.
+
+- `NEXT_PUBLIC_SITE_URL=https://devads-app.vercel.app` is set in the
+  project's production environment. It drives the canonical URL and Open
+  Graph metadata, and `apps/web/middleware.ts` uses it to 308-redirect any
+  other `*.vercel.app` production address (such as the auto-assigned
+  `devads-seven.vercel.app`) to the canonical one.
+- `NEXT_PUBLIC_AD_SERVER_URL` points the site at the ad-server. The
+  ad-server (`services/ad-server`) is set up as the `devads-api` Vercel
+  project; it is not live until its database and secret environment
+  variables are configured, so sign-up and sign-in on the public site do
+  not work yet.
 
 ## VS Code extension
 
