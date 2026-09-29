@@ -156,7 +156,11 @@ export interface RedemptionRouteOptions {
 export async function registerRedemptionRoutes(app: FastifyInstance, opts: RedemptionRouteOptions) {
   const provider = opts.provider;
 
-  const redeemableTypes = () => (provider ? RewardTypeSchema.options.filter((t) => provider.supportsRewardType(t)) : []);
+  // DevAds beta credits are never redeemable, whatever provider is configured:
+  // they are not cash and were never sponsor-funded.
+  const isNeverRedeemable = (t: string) => t === "BETA_CREDITS";
+  const redeemableTypes = () =>
+    provider ? RewardTypeSchema.options.filter((t) => !isNeverRedeemable(t) && provider.supportsRewardType(t)) : [];
 
   async function ownedDeveloper(developerId: string, userId: string) {
     const developer = await prisma.developerProfile.findUnique({ where: { id: developerId } });
@@ -187,7 +191,7 @@ export async function registerRedemptionRoutes(app: FastifyInstance, opts: Redem
         emitDomainEvent("reward.redemption.rejected", { developerId, rewardType, reason: "redemption_disabled" });
         throw new RedemptionRejected(503, "redemption_disabled");
       }
-      if (!provider.supportsRewardType(rewardType)) {
+      if (isNeverRedeemable(rewardType) || !provider.supportsRewardType(rewardType)) {
         throw new RedemptionRejected(400, "reward_type_not_redeemable");
       }
 

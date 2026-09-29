@@ -27,10 +27,11 @@ integration.
 | `CUSTOM_AGENT` | Not implemented | none |
 | `LOCAL_AGENT` | Not implemented | none |
 | `OTHER` | Not implemented | none |
+| `WEB` | **Implemented** | `apps/web` (the developer beta's first-party web client) |
 
 The table mirrors `CLIENT_INTEGRATIONS` in
 `packages/ad-sdk/src/adapter/integrations.ts`, which is the test-enforced
-source of truth: a test fails if any type other than `VS_CODE` is marked
+source of truth: a test fails if any type other than `VS_CODE` and `WEB` is marked
 implemented, or if an implemented entry does not point at a package in this
 repository that depends on the SDK.
 

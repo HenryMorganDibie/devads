@@ -31,9 +31,9 @@ describe("integration registry", () => {
     expect(Object.keys(CLIENT_INTEGRATIONS).sort()).toEqual([...DEV_CLIENT_TYPES].sort());
   });
 
-  it("marks only the VS Code extension as implemented", () => {
+  it("marks only first-party clients shipped in this repo as implemented: the VS Code extension and the DevAds web app", () => {
     const implemented = DEV_CLIENT_TYPES.filter(isImplementedIntegration);
-    expect(implemented).toEqual(["VS_CODE"]);
+    expect(implemented).toEqual(["VS_CODE", "WEB"]);
   });
 
   it("every implemented entry points at an adapter that exists in this repository, and no other entry claims one", () => {

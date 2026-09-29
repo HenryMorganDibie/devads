@@ -69,7 +69,11 @@ enum BillingProviderKind {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String? // nullable: magic-link-only accounts
+  passwordHash String? // nullable: magic-link-only and OAuth-only accounts
+  // Stable external identity for OAuth sign-in, e.g. "supabase:<auth user id>".
+  // Null for email/password accounts. Never linked to an existing account by
+  // email: an OAuth sign-in whose email belongs to another account is refused.
+  authSubject  String?  @unique
   role         UserRole
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -99,6 +103,10 @@ model DeveloperProfile {
   // applied to this developer's revenue-share earnings so fractional
   // cents accumulate exactly instead of being floored away per impression.
   earningsCarryMilliCents Int @default(0)
+  // Developer beta membership: set when the developer accepts the beta terms
+  // (betaTermsVersion records which). BETA campaigns only serve members.
+  betaJoinedAt      DateTime?
+  betaTermsVersion  String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -454,6 +462,8 @@ enum DevClientType {
   CUSTOM_AGENT
   LOCAL_AGENT
   OTHER
+  // The DevAds web app acting as a first-party client (developer beta).
+  WEB
 }
 
 enum DevSessionStatus {
@@ -487,6 +497,9 @@ enum RewardType {
   DISCOUNT
   SUBSCRIPTION_CREDIT
   OTHER
+  // DevAds-funded beta credits. Not cash, not redeemable, never sponsor-funded;
+  // only BETA campaigns grant them (enforced by a CHECK constraint).
+  BETA_CREDITS
 }
 
 enum SponsoredOfferStatus {
@@ -550,6 +563,12 @@ model SponsorshipCampaign {
   // rewardType (e.g. credits). Independent of sponsorChargeCents.
   rewardType           RewardType
   rewardAmountUnits    Int
+  // LIVE: funded by an external sponsor. BETA: DevAds-funded developer beta,
+  // rewards BETA_CREDITS only, and only serves developers who joined the beta.
+  mode                 CampaignMode              @default(LIVE)
+  // When set, a completion only qualifies if the developer opened this
+  // display (OFFER_OPENED) at least this many seconds earlier.
+  minEngagementSeconds Int?
   // What the sponsor is charged per qualifying completion, in integer cents.
   sponsorChargeCents   Int
   currency             String                    @default("USD")
@@ -681,6 +700,10 @@ model DeveloperRewardLedger {
   redemptionId String?
   redemption   RewardRedemption?     @relation(fields: [redemptionId], references: [id], onDelete: NoAction)
   entryType   RewardLedgerEntryType
+  // Audit snapshot on EARNED rows: who funded the reward and the campaign's
+  // mode when it was granted. Null on redemption rows.
+  rewardSource RewardSource?
+  campaignMode CampaignMode?
   amountUnits Int
   status      RewardStatus
   description String?
@@ -727,4 +750,14 @@ model RewardRedemption {
   @@index([developerId, createdAt])
   @@index([status, createdAt])
   @@map("reward_redemptions")
+}
+
+enum CampaignMode {
+  LIVE
+  BETA
+}
+
+enum RewardSource {
+  SPONSOR
+  DEVADS_BETA
 }

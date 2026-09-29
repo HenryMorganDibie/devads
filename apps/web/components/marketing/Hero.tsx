@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { LINKS } from "../../lib/site";
 import { ArrowRight, Container } from "./primitives";
 import { HeroSystem } from "./HeroSystem";
 import { HeroOpportunityCard } from "./HeroOpportunityCard";
@@ -30,7 +32,7 @@ export function Hero() {
                 <span className="mk-pulse absolute inset-0 rounded-full bg-value" />
                 <span className="relative h-2 w-2 rounded-full bg-value/60" />
               </span>
-              The sponsorship layer for modern development
+              Now in developer beta<span className="hidden sm:inline">&nbsp;· The sponsorship layer for modern development</span>
             </p>
 
             <h1
@@ -55,13 +57,17 @@ export function Hero() {
             </div>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <a href="#developers" className="mk-btn mk-btn-primary">
-                For developers <ArrowRight />
-              </a>
-              <a href="#sponsors" className="mk-btn mk-btn-ghost">
-                For sponsors <ArrowRight />
-              </a>
+              <Link href={LINKS.signUp} className="mk-btn mk-btn-primary">
+                Join the Developer Beta <ArrowRight />
+              </Link>
+              <Link href={LINKS.sponsor} className="mk-btn mk-btn-ghost">
+                Become a Sponsor <ArrowRight />
+              </Link>
             </div>
+            <p className="mt-4 max-w-[34rem] text-[13px] leading-relaxed text-[color:var(--mk-muted)]">
+              DevAds is in developer beta. Sign in with GitHub or Google and try the full loop. Beta opportunities are
+              run and funded by DevAds; there are no external sponsors yet.
+            </p>
 
             <ol className="mt-14 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-t border-white/[0.06] pt-6" aria-label="How DevAds works">
               {CHAIN.map((l, i) => (

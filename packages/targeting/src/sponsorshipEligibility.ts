@@ -45,6 +45,8 @@ export interface SponsorshipCandidate {
   developerLifetimeCap: number | null;
   /** Max displays per developer per UTC day; null = use the platform default. */
   frequencyCapPerDay: number | null;
+  /** LIVE (sponsor-funded, the default) or BETA (DevAds-funded developer beta). */
+  mode?: "LIVE" | "BETA";
 }
 
 export interface SponsorshipDeveloperContext {
@@ -53,6 +55,8 @@ export interface SponsorshipDeveloperContext {
   enabled: boolean;
   clientType: string;
   categoriesOptOut?: string[];
+  /** Developer has joined the developer beta; BETA campaigns only serve members. */
+  betaMember?: boolean;
 }
 
 /** Rewarded (EARNED) completions for this developer, per campaign. */
@@ -111,10 +115,11 @@ export function isSponsorshipLive(c: LivenessFields, now: Date): boolean {
  * own opt-out list (no platform-defined category list exists).
  */
 export function isDeveloperEligibleForSponsorship(
-  c: Pick<SponsorshipCandidate, "sponsorCategory" | "eligibleClientTypes">,
+  c: Pick<SponsorshipCandidate, "sponsorCategory" | "eligibleClientTypes" | "mode">,
   dev: SponsorshipDeveloperContext
 ): boolean {
   if (!dev.enabled) return false;
+  if (c.mode === "BETA" && !dev.betaMember) return false;
   if (!isClientTypeEligible(c.eligibleClientTypes, dev.clientType)) return false;
   if (c.sponsorCategory) {
     const optOut = (dev.categoriesOptOut ?? []).map((x) => x.toLowerCase());

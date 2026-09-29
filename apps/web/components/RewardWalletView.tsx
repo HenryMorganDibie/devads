@@ -99,7 +99,11 @@ export function RewardWalletView({
       </section>
 
       <p className="text-xs text-muted mb-10">
-        Amounts are reward units granted by sponsors, separate from your ad earnings. Pending units are
+        Amounts are reward units, separate from your ad earnings.
+        {view.cards.some((c) => c.rewardType === "BETA_CREDITS")
+          ? " Beta Credits are granted by DevAds during the developer beta, not by sponsors; they are not cash and cannot be redeemed."
+          : " Sponsor rewards are granted by the sponsor whose campaign you completed."}{" "}
+        Pending units are
         not yet available. &quot;This month&quot; is the current calendar month in UTC.
         {view.monthSummaryMayBeIncomplete &&
           ` Monthly totals only include your ${view.history.length} most recent entries, so they may be higher.`}{" "}
@@ -127,7 +131,10 @@ export function RewardWalletView({
                   {view.history.map((e) => (
                     <tr key={e.id} className="border-t border-white/5">
                       <td className="py-2">{formatLedgerDate(e.createdAt)}</td>
-                      <td className="py-2">{rewardTypeLabel(e.rewardType)}</td>
+                      <td className="py-2">
+                        {rewardTypeLabel(e.rewardType)}
+                        {e.rewardSource === "DEVADS_BETA" && <span className="text-xs text-muted"> · DevAds beta</span>}
+                      </td>
                       <td className="py-2">{ledgerEntryLabel(e.entryType)}</td>
                       <td className="py-2 text-right font-mono">{formatSignedUnits(e)}</td>
                       <td className="py-2 pl-4">{rewardStatusLabel(e.status)}</td>

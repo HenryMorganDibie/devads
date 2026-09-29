@@ -70,7 +70,7 @@ export function SiteNav() {
               Sign in
             </Link>
             <Link href={LINKS.signUp} className="mk-btn mk-btn-primary !h-9 !px-4 !text-[14px]">
-              Get started
+              Join the beta
             </Link>
             <button
               type="button"

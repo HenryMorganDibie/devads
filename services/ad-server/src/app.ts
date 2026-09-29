@@ -13,6 +13,8 @@ import { registerSponsorshipCampaignRoutes } from "./routes/sponsorshipCampaigns
 import { registerSponsorshipOfferListingRoutes } from "./routes/sponsorshipOffers.js";
 import { registerSponsorshipAdminActivityRoutes } from "./routes/sponsorshipAdminActivity.js";
 import { registerRedemptionRoutes } from "./routes/redemptions.js";
+import { registerBetaRoutes } from "./routes/beta.js";
+import { identityVerifierFromEnv, type IdentityVerifier } from "./lib/identity.js";
 import { attachSession } from "./lib/authGuard.js";
 import { createRedemptionProvider, type RedemptionProvider } from "@devads/shared";
 
@@ -38,10 +40,19 @@ export interface BuildAppOptions {
    * "mock"); unset means redemption is disabled. null disables explicitly.
    */
   redemptionProvider?: RedemptionProvider | null;
+  /**
+   * Verifies OAuth (Supabase Auth) access tokens for developer sign-in.
+   * Defaults to SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY; null disables OAuth.
+   */
+  identityVerifier?: IdentityVerifier | null;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
-  const app = Fastify({ logger: false });
+  // Behind a platform proxy (e.g. Vercel) every request arrives from the
+  // proxy's address, which would make the per-IP rate limits below global.
+  // TRUST_PROXY=true reads the client address from X-Forwarded-For instead;
+  // only enable it where the platform itself sets that header.
+  const app = Fastify({ logger: false, trustProxy: process.env.TRUST_PROXY === "true" });
   await app.register(cors, { origin: allowedOrigins });
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
   // Global default: generous enough for normal extension polling +
@@ -68,6 +79,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       options.redemptionProvider !== undefined
         ? options.redemptionProvider
         : createRedemptionProvider(process.env.REDEMPTION_PROVIDER),
+  });
+
+  await registerBetaRoutes(app, {
+    identityVerifier: options.identityVerifier !== undefined ? options.identityVerifier : identityVerifierFromEnv(),
   });
 
   return app;

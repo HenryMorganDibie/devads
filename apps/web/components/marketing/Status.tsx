@@ -13,6 +13,7 @@ const COLUMNS: Array<{ label: string; tone: string; items: string[] }> = [
       "@devads/ad-sdk protocol SDK and adapter runtime",
       "VS Code extension, the first client",
       "Wait-time sponsored cards in VS Code, the first use case",
+      "Public developer beta: GitHub or Google sign-in, DevAds-funded beta opportunities and Beta Credits",
     ],
   },
   {
@@ -70,6 +71,8 @@ export function Status() {
         </div>
 
         <p className="mt-6 max-w-3xl text-[13.5px] leading-relaxed text-[color:var(--mk-muted)]">
+          <span className="text-[color:var(--mk-text)]">Sponsors: none yet.</span> During the developer beta every
+          opportunity is run and funded by DevAds and labelled as a DevAds Beta Opportunity. Beta Credits are not cash.{" "}
           <span className="text-[color:var(--mk-text)]">Partnerships: none.</span> DevAds has no partnership with any AI
           provider or developer-tool company, and none is needed for the sponsorship loop to work.
         </p>

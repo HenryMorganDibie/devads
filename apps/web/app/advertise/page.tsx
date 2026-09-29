@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Container, Logo } from "../../components/marketing/primitives";
+import { LINKS } from "../../lib/site";
 
 export const metadata: Metadata = {
   title: "Sponsor developers | DevAds",
@@ -27,7 +28,8 @@ const FORMATS = [
 ];
 
 export default function AdvertisePage() {
-  const advertiserAppUrl = process.env.NEXT_PUBLIC_ADVERTISER_APP_URL ?? "http://localhost:3001";
+  // Unset until the sponsor app is deployed; the page then says so instead of linking nowhere.
+  const advertiserAppUrl = process.env.NEXT_PUBLIC_ADVERTISER_APP_URL?.trim() || undefined;
 
   return (
     <div className="mk min-h-screen">
@@ -46,14 +48,36 @@ export default function AdvertisePage() {
             Fund campaigns that pay for verified, qualified developer engagement, and reward the developers who engage,
             instead of buying anonymous impressions. Any legitimate organization can sponsor developers.
           </p>
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <a href={advertiserAppUrl} className="mk-btn mk-btn-primary">
-              Create a sponsor account <ArrowRight />
-            </a>
-            <Link href="/#how-it-works" className="mk-btn mk-btn-ghost">
-              See how it works
-            </Link>
-          </div>
+          {advertiserAppUrl ? (
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+              <a href={advertiserAppUrl} className="mk-btn mk-btn-primary">
+                Create a sponsor account <ArrowRight />
+              </a>
+              <Link href="/#how-it-works" className="mk-btn mk-btn-ghost">
+                See how it works
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-10 max-w-2xl rounded-xl border border-white/[0.08] bg-[#0c0d10] p-5">
+              <p className="text-[15px] leading-relaxed text-[color:var(--mk-text)]/90">
+                DevAds is in developer beta and has no external sponsors yet. Self-serve sponsor accounts open after the
+                beta.{LINKS.contact ? " To talk about sponsoring developers now, get in touch." : ""}
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                {LINKS.contact && (
+                  <a href={LINKS.contact} className="mk-btn mk-btn-primary">
+                    Contact DevAds <ArrowRight />
+                  </a>
+                )}
+                <Link href="/#how-it-works" className="mk-btn mk-btn-ghost">
+                  See how it works
+                </Link>
+                <Link href={LINKS.signUp} className="mk-btn mk-btn-ghost">
+                  Join the Developer Beta
+                </Link>
+              </div>
+            </div>
+          )}
 
           <div className="mt-20 grid gap-12 border-t border-white/[0.06] pt-12 lg:grid-cols-2">
             <section aria-labelledby="how-title">

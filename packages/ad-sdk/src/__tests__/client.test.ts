@@ -534,6 +534,7 @@ describe("public surface", () => {
       "CUSTOM_AGENT",
       "LOCAL_AGENT",
       "OTHER",
+      "WEB",
     ]);
   });
 });

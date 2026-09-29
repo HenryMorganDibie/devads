@@ -220,3 +220,26 @@ describe("listEligibleSponsoredOffers", () => {
     expect(list({ candidates: [candidate({ frequencyCapPerDay: 1 })] })).toHaveLength(1);
   });
 });
+
+describe("developer beta campaigns", () => {
+  const beta = () => candidate({ campaignId: "beta", offerId: "beta-offer", mode: "BETA", rewardType: "BETA_CREDITS" });
+
+  it("never serves a BETA campaign to a developer who has not joined the beta", () => {
+    expect(selectSponsoredOffer(input({ candidates: [beta()] }))).toBeNull();
+    expect(selectSponsoredOffer(input({ candidates: [beta()], dev: { ...input().dev, betaMember: false } }))).toBeNull();
+  });
+
+  it("serves a BETA campaign to a beta member who is opted in", () => {
+    const winner = selectSponsoredOffer(input({ candidates: [beta()], dev: { ...input().dev, betaMember: true } }));
+    expect(winner?.campaignId).toBe("beta");
+  });
+
+  it("still requires the developer's sponsorship opt-in, even for beta members", () => {
+    const dev = { ...input().dev, betaMember: true, enabled: false };
+    expect(selectSponsoredOffer(input({ candidates: [beta()], dev }))).toBeNull();
+  });
+
+  it("treats a campaign with no mode as LIVE, so existing sponsor campaigns are unaffected", () => {
+    expect(selectSponsoredOffer(input({ candidates: [candidate()] }))?.campaignId).toBe(candidate().campaignId);
+  });
+});

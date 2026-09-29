@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, CampaignStatus, CreativeType } from "@prisma/client";
 import { randomBytes, scryptSync } from "node:crypto";
+import { seedBetaCampaign } from "./beta.js";
 
 const prisma = new PrismaClient();
 
@@ -325,12 +326,16 @@ async function main() {
     });
   }
 
+  // The DevAds developer beta campaign (production-safe; also `npm run seed:beta`).
+  await seedBetaCampaign(prisma, process.env.BETA_SITE_URL ?? "http://localhost:3000");
+
   console.log("Seed complete:");
   console.log(`  Admin:      admin@devads.dev / admin12345 (id ${admin.id})`);
   console.log(`  Developer:  dev@devads.dev / dev12345`);
   console.log(`  Advertiser: advertiser@devads.dev / advertiser12345`);
   console.log(`  Campaigns:  ${campaign.name} (APPROVED), ${pendingCampaign.name} (SUBMITTED)`);
   console.log(`  Sponsorships: ${sponsorshipCampaigns.map((c) => c.name).join(", ")} (APPROVED)`);
+  console.log(`  Beta:       DevAds Developer Beta (BETA, DevAds-funded, 50 BETA_CREDITS)`);
 }
 
 main()

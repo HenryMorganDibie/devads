@@ -175,6 +175,7 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         enabled: developer.adsEnabled,
         clientType,
         categoriesOptOut: developer.categoriesOptOut,
+        betaMember: developer.betaJoinedAt !== null,
       },
       displayHistory,
       budgetByCampaignId,
@@ -187,7 +188,8 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
       const empty: SponsoredOfferResponse = { offer: null };
       return reply.send(empty);
     }
-    const offer = candidates.find((c) => c.offerId === winner.offerId)!.offer;
+    const chosen = candidates.find((c) => c.offerId === winner.offerId)!;
+    const offer = chosen.offer;
 
     const displayEventId = randomUUID();
     await prisma.sponsorshipEvent.create({
@@ -214,6 +216,8 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         rewardType: winner.rewardType as NonNullable<SponsoredOfferResponse["offer"]>["rewardType"],
         rewardAmountUnits: winner.rewardAmountUnits,
         expiresAt: offer.expiresAt ? offer.expiresAt.toISOString() : null,
+        campaignMode: chosen.mode ?? "LIVE",
+        minEngagementSeconds: chosen.minEngagementSeconds,
       },
     };
     return reply.send(response);
@@ -297,6 +301,22 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
     const preReason = sponsorshipNotLiveReason(toSponsorshipCandidate(display.campaign, display.offer), now);
     if (preReason) return reply.status(409).send({ error: NOT_LIVE_ERROR[preReason] });
 
+    // Engagement requirement: the developer must have opened THIS display
+    // (a server-recorded OFFER_OPENED) at least minEngagementSeconds ago. The
+    // time comes from the server's own event rows, never from the client, and
+    // events are immutable, so checking before the transaction is sound.
+    const minEngagementSeconds = display.campaign.minEngagementSeconds;
+    if (minEngagementSeconds !== null) {
+      const opened = await prisma.sponsorshipEvent.findFirst({
+        where: { displayEventId: display.eventId, developerId: developer.id, type: "OFFER_OPENED" },
+        orderBy: { createdAt: "asc" },
+      });
+      if (!opened) return reply.status(409).send({ error: "offer_not_opened" });
+      if (now.getTime() - opened.createdAt.getTime() < minEngagementSeconds * 1000) {
+        return reply.status(409).send({ error: "engagement_too_short" });
+      }
+    }
+
     try {
       const reward = await prisma.$transaction(async (tx) => {
         await tx.sponsorshipEvent.create({ data: eventData });
@@ -352,7 +372,10 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
             entryType: "EARNED",
             amountUnits,
             status: "APPROVED",
-            description: "Sponsored offer completion",
+            // Audit snapshot of who funded this reward, taken under the lock.
+            rewardSource: campaign.mode === "BETA" ? "DEVADS_BETA" : "SPONSOR",
+            campaignMode: campaign.mode,
+            description: campaign.mode === "BETA" ? "DevAds beta opportunity completion" : "Sponsored offer completion",
           },
         });
 
@@ -435,6 +458,8 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         entryType: e.entryType,
         amountUnits: e.amountUnits,
         status: e.status,
+        rewardSource: e.rewardSource,
+        campaignMode: e.campaignMode,
         createdAt: e.createdAt.toISOString(),
       })),
     };

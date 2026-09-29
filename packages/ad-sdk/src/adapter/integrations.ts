@@ -33,6 +33,9 @@ export const CLIENT_INTEGRATIONS: Readonly<Record<DevClientType, ClientIntegrati
   CUSTOM_AGENT: { status: "NOT_IMPLEMENTED" },
   LOCAL_AGENT: { status: "NOT_IMPLEMENTED" },
   OTHER: { status: "NOT_IMPLEMENTED" },
+  // First-party: the DevAds web app is itself a protocol client (developer
+  // beta dashboard) and talks to the core only through this SDK.
+  WEB: { status: "IMPLEMENTED", implementation: "apps/web" },
 });
 
 export function isImplementedIntegration(clientType: DevClientType): boolean {

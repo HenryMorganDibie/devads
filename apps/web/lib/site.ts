@@ -21,9 +21,11 @@ export const SITE = {
 } as const;
 
 export const LINKS = {
-  signUp: "/signup",
+  /** Developer sign-up: GitHub/Google sign-in into the developer beta. */
+  signUp: "/join",
   signIn: "/login",
   sponsor: "/advertise",
+  betaTerms: "/beta/terms",
   docs: env(process.env.NEXT_PUBLIC_DOCS_URL),
   github: env(process.env.NEXT_PUBLIC_GITHUB_URL),
   privacy: env(process.env.NEXT_PUBLIC_PRIVACY_URL),
