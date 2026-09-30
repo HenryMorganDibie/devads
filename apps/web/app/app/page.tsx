@@ -232,7 +232,14 @@ export default function DashboardPage() {
           <div className="text-sm">
             <p className="mb-2">Not connected. To use DevAds inside VS Code with this same account:</p>
             <ol className="list-decimal pl-5 space-y-1 text-muted">
-              <li>Install the DevAds extension and run &ldquo;DevAds: Sign In&rdquo; from the command palette.</li>
+              <li>
+                <a href="/downloads/devads-0.1.0.vsix" className="text-accent" download>
+                  Download the DevAds extension (.vsix)
+                </a>
+                , then in VS Code open the Extensions view, click the &ldquo;...&rdquo; menu, and choose &ldquo;Install from
+                VSIX...&rdquo;. DevAds is not yet listed on the VS Code Marketplace, so this manual install is required for now.
+              </li>
+              <li>Run &ldquo;DevAds: Sign In&rdquo; from the command palette.</li>
               <li>
                 Enter the code it shows on the{" "}
                 <Link href="/device" className="text-accent">
