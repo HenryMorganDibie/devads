@@ -102,6 +102,49 @@ describe("SponsoredOfferController: requesting and showing", () => {
     expect(interaction.isActive()).toBe(false);
   });
 
+  it("without an estimate the terminal wait has no availableSeconds capability (CARD only, the request is unchanged)", () => {
+    const interaction = terminalWait(tracker());
+    expect("availableSeconds" in interaction).toBe(false);
+  });
+
+  it("with an estimator the terminal wait exposes it as availableSeconds(), still kind WAIT", () => {
+    let left: number | undefined = 17;
+    const interaction = terminalWait(tracker(), () => left);
+    expect(interaction.kind).toBe("WAIT");
+    expect(interaction.availableSeconds?.()).toBe(17);
+    left = undefined;
+    expect(interaction.availableSeconds?.()).toBeUndefined();
+  });
+
+  it("sends the estimated seconds left in the wait, and only that number", async () => {
+    const { client, controller } = setup();
+    await controller.maybeRequest(tracker(), { ...TICK, availableSeconds: () => 14 });
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({
+      sessionId: "sess_1",
+      interactionKind: "WAIT",
+      availableSeconds: 14,
+    });
+  });
+
+  it("does not show a VIDEO offer when the wait reports no available seconds", async () => {
+    const video = offer({
+      presentationMode: "VIDEO",
+      creative: {
+        id: "cr_10",
+        kind: "VIDEO",
+        url: "https://cdn.example/v.webm",
+        mimeType: "video/webm",
+        posterUrl: null,
+        durationSeconds: 10,
+        width: 1280,
+        height: 720,
+      },
+    });
+    const { view, controller } = setup({ client: mockClient({ requestSponsoredOpportunity: vi.fn().mockResolvedValue(video) }) });
+    await controller.maybeRequest(tracker(), TICK);
+    expect(view.show).not.toHaveBeenCalled();
+  });
+
   it("falls back to the client type alone (SDK default VS_CODE) when no session is available", async () => {
     const { client, controller } = setup({ sessionId: null });
     await controller.maybeRequest(tracker(), TICK);

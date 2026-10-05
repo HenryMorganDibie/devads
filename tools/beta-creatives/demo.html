@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<!--
+  README product demo (25 s): a build starts in VS Code -> DevAds serves a
+  first-party video offer that fits the wait -> the developer opens the
+  product page -> the server verifies -> the wallet updates.
+
+  The VS Code frame is drawn; everything DevAds shows in it uses the
+  extension's real strings, and the video playing in the webview is the
+  real Schema-Watch 15 s creative (stage.html). The browser steps are real
+  screenshots of the running web app (demo-assets/). Rendered by
+  render-demo.mjs; every frame is a pure function of t.
+-->
+<style>
+  @font-face { font-family: "Inter"; src: url("node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "JBM"; src: url("node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+  @font-face { font-family: "JBM"; src: url("node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2") format("woff2"); font-weight: 500; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: #07080a; }
+  body { font-family: "Inter", sans-serif; color: #e8e8ec; -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden;
+    background: radial-gradient(900px 500px at 20% 0%, rgba(98,223,168,.10), transparent 70%), radial-gradient(800px 500px at 100% 100%, rgba(126,166,255,.10), transparent 70%), #07080a; }
+  .abs { position: absolute; }
+  /* VS Code window */
+  .vsc { left: 40px; top: 20px; width: 1200px; height: 590px; border-radius: 12px; overflow: hidden; background: #1e1e1e; border: 1px solid #333; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .titlebar { left: 0; top: 0; right: 0; height: 30px; background: #252526; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #9d9d9d; }
+  .dots { position: absolute; left: 12px; top: 10px; display: flex; gap: 7px; }
+  .dots i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .activity { left: 0; top: 30px; width: 44px; bottom: 24px; background: #2c2c2c; }
+  .activity b { position: absolute; left: 12px; width: 20px; height: 20px; border-radius: 4px; background: #555; opacity: .55; }
+  .tabs { top: 30px; height: 34px; background: #252526; display: flex; }
+  .tab { padding: 0 14px; display: flex; align-items: center; font-size: 12.5px; color: #cfcfcf; background: #1e1e1e; border-right: 1px solid #252526; border-top: 1px solid #0078d4; height: 34px; }
+  .code { top: 64px; padding: 12px 0 0 0; font-family: "JBM"; font-size: 13.5px; line-height: 21px; white-space: pre; color: #d4d4d4; overflow: hidden; }
+  .ln { display: inline-block; width: 42px; text-align: right; padding-right: 14px; color: #6e7681; }
+  .k { color: #569cd6; } .f { color: #dcdcaa; } .s { color: #ce9178; } .c { color: #6a9955; } .t { color: #4ec9b0; } .n { color: #b5cea8; }
+  .term { background: #1e1e1e; border-top: 1px solid #333; }
+  .termhead { height: 30px; display: flex; align-items: center; gap: 18px; padding-left: 14px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #9d9d9d; }
+  .termhead .on { color: #e7e7e7; border-bottom: 1px solid #e7e7e7; padding-bottom: 4px; }
+  .termbody { padding: 6px 14px; font-family: "JBM"; font-size: 13px; line-height: 20px; white-space: pre; color: #cccccc; }
+  .status { left: 0; right: 0; bottom: 0; height: 24px; background: #007acc; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px; color: #fff; }
+  .sbitem { padding: 0 8px; height: 24px; display: flex; align-items: center; gap: 6px; }
+  /* webview */
+  .webview { top: 30px; bottom: 24px; background: #1e1e1e; border-left: 1px solid #333; overflow: hidden; }
+  .wvtab { height: 34px; background: #252526; display: flex; }
+  .wvbody { padding: 14px 16px; font-size: 12.5px; line-height: 1.45; color: #cccccc; }
+  .label { display: inline-block; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid #0078d4; color: #3794ff; border-radius: 4px; padding: 2px 6px; }
+  .creative { margin-top: 10px; width: 508px; height: 286px; border-radius: 7px; overflow: hidden; position: relative; background: #000; }
+  .creative iframe { width: 1280px; height: 720px; border: 0; transform: scale(0.396875); transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+  .btn { display: inline-block; padding: 5px 12px; border-radius: 3px; font-size: 12.5px; }
+  .btn.p { background: #0e639c; color: #fff; } .btn.s { background: #3a3d41; color: #fff; }
+  /* browser */
+  .browser { left: 150px; width: 980px; height: 560px; border-radius: 12px; overflow: hidden; background: #0a0a0b; border: 1px solid #2c2c30; box-shadow: 0 40px 100px rgba(0,0,0,.65); }
+  .bbar { height: 40px; background: #1c1c1f; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid #2a2a2e; }
+  .url { flex: 1; height: 26px; border-radius: 13px; background: #2a2a2e; display: flex; align-items: center; padding: 0 14px; font-size: 12.5px; color: #b8b8c0; font-family: "JBM"; }
+  .shot { position: absolute; left: 0; top: 40px; width: 980px; height: 520px; overflow: hidden; }
+  .shot img { position: absolute; left: 0; width: 980px; }
+  .ring { position: absolute; border: 3px solid #62dfa8; border-radius: 12px; box-shadow: 0 0 0 6px rgba(98,223,168,.18); }
+  /* caption */
+  .caption { left: 40px; right: 40px; top: 628px; height: 70px; display: flex; align-items: center; gap: 18px; }
+  .step { font-family: "JBM"; font-size: 15px; color: #07080a; background: #62dfa8; border-radius: 8px; padding: 6px 10px; font-weight: 500; }
+  .captext { font-size: 22px; letter-spacing: -0.01em; color: #f1f1f3; }
+  .note { position: absolute; right: 40px; top: 700px; font-size: 11px; color: #6c6c74; font-family: "JBM"; letter-spacing: .04em; transform: translateY(-100%); }
+  .pbar { position: absolute; left: 0; bottom: 0; height: 4px; background: #62dfa8; }
+  .chip { font-family: "JBM"; font-size: 12.5px; background: #111317; border: 1px solid #62dfa8; color: #b9f5da; padding: 7px 11px; border-radius: 8px; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+  .badge { font-family: "JBM"; font-size: 18px; background: rgba(10,10,12,.92); border: 1px solid #3a3a40; color: #fff; padding: 10px 16px; border-radius: 10px; }
+  .endcard { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="layer"></div><div id="creativeHost" style="position:absolute;overflow:hidden;display:none;border-radius:7px;z-index:5"><iframe id="creative" src="stage.html" style="width:1280px;height:720px;border:0;transform:scale(0.396875);transform-origin:0 0;position:absolute;left:0;top:0"></iframe></div><div id="cursorLayer"></div></div>
+<script>
+  const T = { offer: 3.4, video: 5.0, click: 11.0, browser: 12.4, ready: 15.9, confirm: 16.5, verified: 16.9, wallet: 19.4, end: 23.2, total: 25 };
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const ease = (x) => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  // apps/vscode-extension/src/waitEstimator.ts (excerpt, real code), hand-highlighted.
+  const CODE = [
+    '<span class="c">/** Whole seconds likely left in this run, or undefined when there is no estimate. */</span>',
+    '<span class="f">availableSeconds</span>(commandLine: <span class="t">string</span>, elapsedSeconds: <span class="t">number</span>): <span class="t">number</span> | <span class="k">undefined</span> {',
+    '  <span class="k">const</span> expected = <span class="k">this</span>.<span class="f">expectedSeconds</span>(commandLine);',
+    '  <span class="k">if</span> (expected === <span class="k">undefined</span>) <span class="k">return</span> <span class="k">undefined</span>;',
+    '  <span class="k">const</span> left = Math.<span class="f">floor</span>(expected - elapsedSeconds);',
+    '  <span class="k">return</span> left > <span class="n">0</span> ? left : <span class="k">undefined</span>;',
+    '}',
+    '',
+    '<span class="c">// Only this number is sent. The command stays on this machine, hashed.</span>',
+    '<span class="k">await</span> runtime.<span class="f">offerDuringWait</span>({',
+    '  isActive: () => tracker.<span class="f">isStillRunning</span>(),',
+    '  availableSeconds: () => estimator.<span class="f">availableSeconds</span>(command, tracker.<span class="f">elapsedSeconds</span>()),',
+    '});',
+  ];
+
+  const BUILD = [
+    [0.5, '<span style="color:#9d9d9d">•</span> Packages in scope: @devads/ad-sdk, @devads/shared, @devads/web'],
+    [0.9, '<span style="color:#9d9d9d">•</span> Running <b>build</b> in 3 packages'],
+    [1.5, '<span style="color:#4ec9b0">@devads/shared:build:</span> > tsc -p tsconfig.json'],
+    [2.4, '<span style="color:#dcdcaa">@devads/ad-sdk:build:</span> > tsc -p tsconfig.json'],
+    [3.3, '<span style="color:#c586c0">@devads/web:build:</span> > next build'],
+    [4.4, '<span style="color:#c586c0">@devads/web:build:</span>    Creating an optimized production build ...'],
+    [18.5, '<span style="color:#c586c0">@devads/web:build:</span>  <span style="color:#3fb950">✓</span> Compiled successfully'],
+    [21.0, ' <span style="color:#3fb950">Tasks:    3 successful, 3 total</span>'],
+  ];
+
+  const CAPTIONS = [
+    [0, "1/5", "A build starts in VS Code. The developer is waiting anyway."],
+    [T.offer, "2/5", "DevAds serves a first-party offer that fits the wait: ~17 s left, so the 15 s cut."],
+    [T.click, "3/5", "The developer chooses to open the project page. Nothing interrupts their work."],
+    [T.browser, "4/5", "After 15 s on the page, the server verifies the action. Watching alone earns nothing."],
+    [T.wallet, "5/5", "25 Beta Credits land in the wallet, ledgered as a DevAds beta reward."],
+  ];
+
+  const spinner = (t) => "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[Math.floor(t * 12) % 10];
+
+  function vscode(t, product) {
+    const videoOpen = t >= T.video && t < T.click + 0.35;
+    const vw = videoOpen ? 540 * ease((t - T.video) / 0.45) * (t > T.click ? clamp(1 - (t - T.click) / 0.35) : 1) : 0;
+    const leftW = 1156 - vw;
+    const building = t < 21.0;
+    const lines = BUILD.filter(([at]) => t >= at).map(([, l]) => l);
+    if (building) lines.push(`<span style="color:#9d9d9d">${spinner(t)} building…</span>`);
+    const code = CODE.map((l, i) => `<span class="ln">${41 + i}</span>${l}`).join("\n");
+    const offerOn = t >= T.offer && t < T.click + 0.35;
+    const offerP = ease((t - T.offer) / 0.4);
+    const statusOffer = offerOn
+      ? `<span class="sbitem" style="background:rgba(255,255,255,${0.12 + 0.18 * (1 - offerP)});opacity:${offerP}">🎁 ▶ DevAds Beta: DevAds Beta Opportunity: Schema-Watch c… · 25 units (DevAds beta credits)</span>`
+      : "";
+    const chip = t >= T.offer + 0.3 && t < T.video + 1.2
+      ? `<div class="abs chip" style="right:${40 + 20}px;top:${20 + 590 - 24 - 58}px;opacity:${ease((t - T.offer - 0.3) / 0.3) * clamp((T.video + 1.2 - t) / 0.3)}">availableWaitSeconds: 17 → server picks the 15 s creative</div>`
+      : "";
+
+    const lt = t - T.video; // creative playback time
+    const webview = vw > 1 ? `
+      <div class="abs webview" style="left:${44 + leftW}px;width:${vw}px">
+        <div class="wvtab"><div class="tab" style="border-top-color:#3794ff">DevAds Beta · First-party</div></div>
+        <div class="wvbody" style="width:540px">
+          <span class="label">DevAds Beta · First-party</span>
+          <div class="creative" id="creativeSlot"></div>
+          <div style="font-weight:600;color:#e7e7e7;margin-top:10px">DevAds Beta Opportunity: Schema-Watch catches breaking API changes</div>
+          <div style="margin-top:6px;font-weight:600;color:#e7e7e7">To earn 25 units (DevAds beta credits): Open the project page from this offer, spend at least 15 seconds on it, then confirm.</div>
+          <div style="margin-top:6px;opacity:.7;font-size:11.5px">Watching the video does not earn anything; the reward requires the action above, verified by DevAds.</div>
+          <div style="margin-top:10px;display:flex;gap:8px"><span class="btn p" id="openbtn">Open project page</span><span class="btn s">Skip</span></div>
+        </div>
+      </div>` : "";
+
+    return { html: `
+      <div class="abs vsc">
+        <div class="abs titlebar"><span class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>waitEstimator.ts — devads — Visual Studio Code</div>
+        <div class="abs activity"><b style="top:12px"></b><b style="top:52px"></b><b style="top:92px"></b><b style="top:132px"></b></div>
+        <div class="abs tabs" style="left:44px;width:${leftW}px"><div class="tab">waitEstimator.ts</div></div>
+        <div class="abs code" style="left:44px;width:${leftW}px;height:${392 - 64}px">${code}</div>
+        <div class="abs term" style="left:44px;width:${leftW}px;top:392px;bottom:24px">
+          <div class="termhead"><span>Problems</span><span>Output</span><span class="on">Terminal</span></div>
+          <div class="termbody"><span style="color:#3fb950">~/devads</span> <span style="color:#9d9d9d">$</span> npm run build\n${lines.slice(-7).join("\n")}</div>
+        </div>
+        ${webview}
+        <div class="abs status"><span class="sbitem">⎇ main</span><span style="display:flex">${statusOffer}<span class="sbitem">DevAds</span></span></div>
+      </div>${chip}`, lt, videoOpen: vw > 1 };
+  }
+
+  function cursor(x, y, pressed) {
+    return `<svg class="abs" style="left:${x}px;top:${y}px;z-index:30" width="26" height="30" viewBox="0 0 26 30"><path d="M2 2 L2 24 L8 18.5 L12.5 28 L16 26.4 L11.7 17.2 L20 17.2 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>` +
+      (pressed > 0 ? `<div class="abs" style="left:${x - 18}px;top:${y - 18}px;width:36px;height:36px;border-radius:50%;border:3px solid rgba(98,223,168,${pressed});transform:scale(${1 + (1 - pressed) * 0.8});z-index:19"></div>` : "");
+  }
+
+  function browser(t) {
+    const inP = ease((t - T.browser) / 0.55);
+    const top = 40 + (1 - inP) * 620;
+    let img = "demo-assets/product_countdown.jpg", pos = "bottom", url = "devads-app.vercel.app/beta/opportunity/schema-watch?d=23088994-…";
+    if (t >= T.ready) img = "demo-assets/product_ready.jpg";
+    if (t >= T.verified) img = "demo-assets/product_verified.jpg";
+    if (t >= T.wallet) { img = "demo-assets/wallet.jpg"; pos = "top"; url = "devads-app.vercel.app/app/wallet"; }
+    const imgTop = pos === "bottom" ? 520 - 612.5 : 0;
+    let extra = "";
+    if (t >= 15.0 && t < T.ready + 0.3) {
+      const o = clamp((t - 15.0) / 0.25) * clamp((T.ready + 0.3 - t) / 0.25);
+      extra += `<div class="abs badge" style="left:${980 / 2 - 110}px;top:230px;opacity:${o}">⏩ 15 seconds later</div>`;
+    }
+    if (t >= T.verified + 0.3 && t < T.wallet) extra += `<div class="ring" style="left:170px;top:${443 + imgTop + 0}px;width:640px;height:132px;opacity:${ease((t - T.verified - 0.3) / 0.3)}"></div>`;
+    if (t >= T.wallet + 0.5) {
+      const o = ease((t - T.wallet - 0.5) / 0.35);
+      extra += `<div class="ring" style="left:60px;top:176px;width:428px;height:120px;opacity:${o}"></div>`;
+      const o2 = ease((t - T.wallet - 1.4) / 0.35);
+      extra += `<div class="ring" style="left:80px;top:447px;width:822px;height:44px;opacity:${o2}"></div>`;
+    }
+    return `<div class="abs browser" style="top:${top}px">
+      <div class="bbar"><span class="dots" style="position:static;display:flex;gap:7px"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span><div class="url">${esc(url)}</div></div>
+      <div class="shot"><img src="${img}" style="top:${imgTop}px" />${extra}</div>
+    </div>`;
+  }
+
+  const layer = document.getElementById("layer");
+  const host = document.getElementById("creativeHost");
+  const frame = document.getElementById("creative");
+  const cursorLayer = document.getElementById("cursorLayer");
+  window.renderDemo = (t, product) => {
+    let html = "";
+    if (t < T.end) {
+      const v = vscode(t, product);
+      html += v.html;
+      if (t >= T.browser) html += browser(t);
+      const cap = [...CAPTIONS].reverse().find(([at]) => t >= at);
+      const capIn = ease((t - cap[0]) / 0.35);
+      html += `<div class="abs caption" style="opacity:${capIn}"><span class="step">${cap[1]}</span><span class="captext">${esc(cap[2])}</span></div>`;
+      html += `<div class="note">Product demo · real DevAds UI and creative, rendered walkthrough</div>`;
+      layer.innerHTML = html + `<div class="pbar" style="width:${(t / T.total) * 100}%"></div>`;
+      // The real creative plays in a persistent iframe placed over the webview's slot.
+      const slot = document.getElementById("creativeSlot");
+      const wv = document.querySelector(".webview");
+      if (slot && wv) {
+        const r = slot.getBoundingClientRect(), w = wv.getBoundingClientRect();
+        host.style.display = "block";
+        host.style.left = r.left + "px"; host.style.top = r.top + "px";
+        host.style.width = Math.max(0, Math.min(r.width, w.right - r.left)) + "px"; host.style.height = r.height + "px";
+        frame.contentWindow.renderFrame(product, 15, clamp(v.lt, 0, 14.99));
+      } else host.style.display = "none";
+      // Cursor: glide to "Open project page" and click; later to "Confirm completion" and click.
+      let cur = "";
+      const open = document.getElementById("openbtn");
+      if (open && t >= T.click - 1.2) {
+        const b = open.getBoundingClientRect();
+        const tx = b.left + b.width * 0.55, ty = b.top + b.height * 0.55;
+        const p = ease((t - (T.click - 1.2)) / 1.0);
+        cur = cursor(900 + (tx - 900) * p, 560 + (ty - 560) * p, t >= T.click - 0.15 ? clamp(1 - (t - T.click + 0.15) / 0.55) : 0);
+      }
+      if (t >= T.ready - 0.2 && t < T.verified + 0.2) {
+        const tx = 150 + 1 + 275, ty = 40 + 1 + 40 + 442;
+        const p = ease((t - (T.ready - 0.2)) / 0.7);
+        cur = cursor(700 + (tx - 700) * p, 560 + (ty - 560) * p, t >= T.confirm - 0.1 ? clamp(1 - (t - T.confirm + 0.1) / 0.5) : 0);
+      }
+      cursorLayer.innerHTML = cur;
+      return;
+    }
+    host.style.display = "none";
+    cursorLayer.innerHTML = "";
+    const e = ease((t - T.end) / 0.5);
+    layer.innerHTML = `<div class="abs endcard" style="opacity:${e}">
+        <div style="font-family:JBM;font-size:15px;letter-spacing:.2em;color:#62dfa8;text-transform:uppercase">Now in developer beta</div>
+        <div style="font-size:84px;font-weight:700;letter-spacing:-0.04em;margin-top:18px">DevAds</div>
+        <div style="font-size:28px;color:#c9c9cf;margin-top:10px">The sponsorship infrastructure for AI-powered development.</div>
+        <div style="font-family:JBM;font-size:20px;color:#8d8c86;margin-top:30px">devads-app.vercel.app/join</div>
+      </div><div class="pbar" style="width:${(t / T.total) * 100}%"></div>`;
+  };
+</script>
+</body>
+</html>

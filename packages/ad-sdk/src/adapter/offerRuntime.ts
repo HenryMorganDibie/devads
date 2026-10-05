@@ -10,6 +10,35 @@ import type {
   WaitHandle,
 } from "./types.js";
 
+/**
+ * Whole seconds the interaction reports as available, clamped to the
+ * protocol's 0-3600 range, or undefined when the interaction has no such
+ * capability, no estimate right now, or its estimate throws.
+ */
+function availableSecondsOf(interaction: QualifyingInteraction): number | undefined {
+  try {
+    if (typeof interaction.availableSeconds !== "function") return undefined;
+    const v = interaction.availableSeconds();
+    if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
+    return Math.min(3600, Math.max(0, Math.floor(v)));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Client-side defensive re-check (non-authoritative: the server already chose
+ * a creative that fit when it answered). A VIDEO offer is presentable only
+ * with a creative no longer than the seconds still available. CARD offers
+ * (and offers from older servers without a presentation mode) always fit.
+ * An interaction that reports no available seconds never fits a VIDEO offer.
+ */
+export function fitsWindow(offer: SponsoredOpportunity, availableSeconds: number | undefined): boolean {
+  if (offer.presentationMode !== "VIDEO") return true;
+  if (!offer.creative || availableSeconds === undefined) return false;
+  return offer.creative.durationSeconds <= availableSeconds;
+}
+
 export interface SponsoredOfferRuntimeDeps {
   getClient: ProtocolClientProvider;
   session: SessionProvider;
@@ -31,8 +60,9 @@ interface DisplayedOffer {
  * action. It never throws; any failure degrades to "no offer" and a log
  * line.
  *
- * What is sent: the session id, the interaction's kind and the
- * displayEventId, nothing else. The runtime never sees, and has no way to
+ * What is sent: the session id, the interaction's kind, the whole number of
+ * seconds it reports as available (only when it has that capability) and
+ * the displayEventId, nothing else. The runtime never sees, and has no way to
  * send, source code, prompts, model output, file paths, commands or
  * secrets. It makes no economic decision: the server selects offers,
  * enforces caps and budgets, and decides whether a completion is rewarded.
@@ -69,11 +99,16 @@ export class SponsoredOfferRuntime {
 
       const sessionId = this.deps.session.currentSessionId() ?? (await this.deps.session.start()) ?? undefined;
 
+      // Sent only when the interaction can estimate it; otherwise the server
+      // serves CARD offers only.
+      const available = availableSecondsOf(interaction);
       let offer: SponsoredOpportunity | null;
       try {
-        offer = await client.requestSponsoredOpportunity(
-          sessionId ? { sessionId, interactionKind: interaction.kind } : { interactionKind: interaction.kind }
-        );
+        offer = await client.requestSponsoredOpportunity({
+          ...(sessionId ? { sessionId } : {}),
+          interactionKind: interaction.kind,
+          ...(available !== undefined ? { availableSeconds: available } : {}),
+        });
       } catch (err) {
         if (isStaleSessionError(err)) this.deps.session.invalidate();
         this.log(`sponsored offer request failed: ${describeError(err)}`);
@@ -82,6 +117,11 @@ export class SponsoredOfferRuntime {
 
       // Never show anything after the interaction is over.
       if (!offer || !interaction.isActive()) return;
+      // Never start a video that no longer fits: time passed during the request.
+      if (!fitsWindow(offer, availableSecondsOf(interaction))) {
+        this.log("sponsored video not presented: no longer fits the available time");
+        return;
+      }
 
       this.current = { offer, sessionId };
       this.lastShown = this.current;

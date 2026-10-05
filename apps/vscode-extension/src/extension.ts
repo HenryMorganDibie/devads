@@ -10,15 +10,20 @@ import { createSponsorshipClient } from "./sponsorshipClient";
 import { SponsorshipSession } from "./sponsorshipSession";
 import { SponsoredOfferController } from "./sponsoredOffer";
 import {
+  offerLabel,
   OPEN_OFFER_COMMAND,
   SHOW_OFFER_COMMAND,
   SKIP_OFFER_COMMAND,
   StatusBarSponsoredOffer,
 } from "./statusBarSponsoredOffer";
+import { OfferPresentationController, parsePresentationPreference } from "./offerPresentation";
+import { WebviewOfferPanel } from "./offerPanel";
+import { WaitEstimator } from "./waitEstimator";
 import { loadWallet } from "./rewardWallet";
 
 const POLL_INTERVAL_MS = 1000;
 const INSTALLATION_ID_KEY = "devads.installationId";
+const WAIT_HISTORY_KEY = "devads.waitHistory";
 
 // Held at module scope only so deactivate() can end the sponsorship session.
 let activeSponsorshipSession: SponsorshipSession | undefined;
@@ -32,6 +37,8 @@ function readConfig() {
     webAppUrl: cfg.get<string>("webAppUrl", "http://localhost:3000"),
     telemetryEnabled: cfg.get<boolean>("telemetryEnabled", true),
     sponsorshipEnabled: cfg.get<boolean>("sponsorship.enabled", true),
+    sponsorshipPresentation: parsePresentationPreference(cfg.get<string>("sponsorship.presentation", "panel")),
+    sponsorshipVideoEnabled: cfg.get<boolean>("sponsorship.video.enabled", true),
   };
 }
 
@@ -67,9 +74,36 @@ export function activate(context: vscode.ExtensionContext) {
     });
   const sponsorshipSession = new SponsorshipSession(getSponsorshipClient, log);
   activeSponsorshipSession = sponsorshipSession;
-  const sponsoredOfferView = new StatusBarSponsoredOffer();
+  // Presentation: the DevAds offer panel first (any presentation mode), the
+  // existing status bar item as the compact mode and the fallback.
+  const sponsoredOfferStatusBar = new StatusBarSponsoredOffer();
+  context.subscriptions.push(sponsoredOfferStatusBar);
+  const sponsoredOfferView = new OfferPresentationController({
+    statusBar: sponsoredOfferStatusBar,
+    createPanel: (events) =>
+      new WebviewOfferPanel(
+        {
+          open: (offer) => void sponsoredOffers.open(offer),
+          // Act only on the offer still current, like the status bar's Skip.
+          skip: (offer) => {
+            if (sponsoredOffers.getCurrent()?.displayEventId === offer.displayEventId) void sponsoredOffers.skip();
+          },
+          log,
+        },
+        events
+      ),
+    preference: () => readConfig().sponsorshipPresentation,
+    videoAllowed: () => readConfig().sponsorshipVideoEnabled,
+    log,
+  });
   context.subscriptions.push(sponsoredOfferView);
-  const sponsoredOffers = new SponsoredOfferController({
+  // Local-only command timing history (SHA-256 keyed, never the command
+  // text), backing the terminal wait's availableSeconds() estimate.
+  const waitEstimator = new WaitEstimator({
+    get: () => context.workspaceState.get<Record<string, number[]>>(WAIT_HISTORY_KEY) ?? {},
+    set: (value) => void context.workspaceState.update(WAIT_HISTORY_KEY, value),
+  });
+  const sponsoredOffers: SponsoredOfferController = new SponsoredOfferController({
     getClient: getSponsorshipClient,
     session: sponsorshipSession,
     view: sponsoredOfferView,
@@ -199,12 +233,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Sponsored offers: same wait signal, read-only use of the trackers,
     // after the standard flow has had its turn. maybeRequest never throws.
     if (config.enabled && config.sponsorshipEnabled) {
+      // The wait reports available seconds (making VIDEO possible) only when
+      // the panel can play it: panel presentation, video on, and a command
+      // to estimate. Otherwise the request is exactly the CARD-only one.
+      const canPlayVideo = config.sponsorshipPresentation === "panel" && config.sponsorshipVideoEnabled;
       for (const [, tracker] of trackers) {
+        const command = tracker.currentCommand();
         await sponsoredOffers.maybeRequest(tracker, {
           enabled: true,
           minimumWaitSeconds: config.minimumWaitSeconds,
           isSignedIn,
           standardAdShowing: statusBar.getCurrent() !== null,
+          availableSeconds:
+            canPlayVideo && command ? () => waitEstimator.availableSeconds(command, tracker.elapsedSeconds()) : undefined,
         });
       }
     }
@@ -242,6 +283,16 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       shellApi.onDidEndTerminalShellExecution((e) => {
         const tracker = trackers.get(e.terminal);
+        // Learn this command's duration (stored locally, hashed) for future
+        // estimates, only while that estimate can be used (video in the panel).
+        const config = readConfig();
+        const learning =
+          config.enabled &&
+          config.sponsorshipEnabled &&
+          config.sponsorshipPresentation === "panel" &&
+          config.sponsorshipVideoEnabled;
+        const finished = learning && tracker?.isStillRunning() ? tracker.currentCommand() : null;
+        if (tracker && finished) waitEstimator.record(finished, tracker.elapsedSeconds());
         tracker?.onCommandEnd();
         void reportViewCompleteIfShown();
         sponsoredOffers.onCommandEnd();
@@ -303,7 +354,7 @@ export function activate(context: vscode.ExtensionContext) {
       const view = "View offer";
       const skip = "Skip";
       const choice = await vscode.window.showInformationMessage(
-        `Sponsored: ${offer.title}. ${offer.description}`,
+        `${offerLabel(offer)}: ${offer.title}. ${offer.description}`,
         view,
         skip
       );

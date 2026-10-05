@@ -311,7 +311,7 @@ describe("SponsoredOfferRuntime with qualifying interactions", () => {
     expect(client.reportOfferEvent).not.toHaveBeenCalled();
   });
 
-  it("asks the interaction only for its kind and whether it is active", async () => {
+  it("asks the interaction only for its kind, whether it is active, and its optional available seconds", async () => {
     const { runtime } = setup();
     const seen = new Set<string | symbol>();
     const interaction = new Proxy(waitInteraction(), {
@@ -321,7 +321,7 @@ describe("SponsoredOfferRuntime with qualifying interactions", () => {
       },
     });
     await runtime.offerDuring(interaction);
-    expect([...seen].sort()).toEqual(["isActive", "kind"]);
+    expect([...seen].sort()).toEqual(["availableSeconds", "isActive", "kind"]);
   });
 });
 

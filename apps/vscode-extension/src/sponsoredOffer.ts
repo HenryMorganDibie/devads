@@ -27,7 +27,8 @@ import type { SponsorshipApi } from "./sponsorshipClient";
  *    while a standard ad is already showing for the same wait.
  *
  * What is sent to the SDK: the session id, the interaction kind (always
- * WAIT here) and the offer's server-issued displayEventId, nothing else. No command line, language, file path,
+ * WAIT here), optionally the estimated whole seconds left in the wait, and
+ * the offer's server-issued displayEventId, nothing else. No command line, language, file path,
  * workspace info, source code or prompt content is ever passed.
  */
 
@@ -43,9 +44,19 @@ export interface WaitSignal {
  * The qualifying interaction this extension observes: a terminal command
  * that is still running. Explicitly the WAIT kind; it is active exactly as
  * long as the command runs.
+ *
+ * When `availableSeconds` is given (an estimate backed by the local
+ * WaitEstimator), the interaction exposes it as its optional
+ * availableSeconds() capability, which is what makes a VIDEO offer possible.
+ * Without it the interaction has no such capability and only CARD offers
+ * can be served, exactly as before video existed.
  */
-export function terminalWait(tracker: Pick<WaitSignal, "isStillRunning">): QualifyingInteraction {
-  return { kind: "WAIT", isActive: () => tracker.isStillRunning() };
+export function terminalWait(
+  tracker: Pick<WaitSignal, "isStillRunning">,
+  availableSeconds?: () => number | undefined
+): QualifyingInteraction {
+  const interaction: QualifyingInteraction = { kind: "WAIT", isActive: () => tracker.isStillRunning() };
+  return availableSeconds ? { ...interaction, availableSeconds } : interaction;
 }
 
 export interface SponsoredOfferView {
@@ -73,6 +84,14 @@ export interface OfferTickInput {
   isSignedIn: boolean;
   /** True if the standard ad status bar item is currently showing an ad. */
   standardAdShowing: boolean;
+  /**
+   * Local estimate of whole seconds left in this wait (see WaitEstimator),
+   * returning undefined when there is none. Becomes the terminal wait's
+   * availableSeconds() capability; only the number is ever sent. Omitted
+   * (video off, compact status-bar presentation, unknown command) means
+   * the wait offers CARD presentation only.
+   */
+  availableSeconds?: () => number | undefined;
 }
 
 export class SponsoredOfferController {
@@ -131,7 +150,7 @@ export class SponsoredOfferController {
       if (input.standardAdShowing) return;
 
       // A running terminal command is a WAIT-kind qualifying interaction.
-      await this.runtime.offerDuring(terminalWait(tracker));
+      await this.runtime.offerDuring(terminalWait(tracker, input.availableSeconds));
     } catch {
       this.deps.log?.("sponsored offer tick failed: unexpected_error");
     }

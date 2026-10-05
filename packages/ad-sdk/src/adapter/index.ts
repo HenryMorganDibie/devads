@@ -8,7 +8,7 @@
 // never touches the sponsorship core, reward accounting or this runtime.
 
 export { DevelopmentSessionManager } from "./session.js";
-export { SponsoredOfferRuntime, type SponsoredOfferRuntimeDeps } from "./offerRuntime.js";
+export { fitsWindow, SponsoredOfferRuntime, type SponsoredOfferRuntimeDeps } from "./offerRuntime.js";
 export { canClaimCompletionOnOpen, formatReward, rewardLabel } from "./rewards.js";
 export { describeError, isRetryableCompletionError, isStaleSessionError } from "./errors.js";
 export {

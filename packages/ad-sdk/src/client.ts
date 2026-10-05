@@ -125,13 +125,15 @@ export class DevAdsClient {
    *
    * `interactionKind` says what gave the client this opportunity (a wait, a
    * developer request, ...). It is sent only when given; the server records
-   * an omitted kind as WAIT.
+   * an omitted kind as WAIT. `availableSeconds` is sent only when given;
+   * without it the server serves no VIDEO offer.
    */
   async requestSponsoredOpportunity(context: OpportunityContext = {}): Promise<SponsoredOpportunity | null> {
     const query = validateRequest(SponsoredOfferRequestSchema, {
       clientType: context.clientType ?? this.defaults.clientType,
       sessionId: context.sessionId,
       interactionKind: context.interactionKind,
+      availableSeconds: context.availableSeconds,
     });
     if (!query.clientType && !query.sessionId) {
       throw new DevAdsError("invalid_request", "clientType or sessionId is required");
@@ -142,6 +144,7 @@ export class DevAdsClient {
         sessionId: query.sessionId,
         // The schema fills in the default; only send a kind the caller chose.
         interactionKind: context.interactionKind === undefined ? undefined : query.interactionKind,
+        availableSeconds: query.availableSeconds === undefined ? undefined : String(query.availableSeconds),
       },
     });
     return res.offer;

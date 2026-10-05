@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Prisma, prisma, type DevelopmentSession } from "@devads/database";
 import {
+  MIN_VIDEO_WINDOW_SECONDS,
   resolveCarry,
   SponsoredOfferRequestSchema,
   SponsorshipEventRequestSchema,
@@ -14,6 +15,7 @@ import {
 } from "@devads/shared";
 import {
   developerRewardCapReached,
+  selectCreativeForWindow,
   selectSponsoredOffer,
   sponsorshipNotLiveReason,
   wouldExceedSponsorshipBudget,
@@ -26,6 +28,7 @@ import {
   loadRewardCounts,
   loadSponsorshipBudgetUsage,
   loadSponsorshipCandidates,
+  resolveCtaUrl,
   toSponsorshipCandidate,
 } from "../lib/sponsorshipCandidates.js";
 
@@ -130,11 +133,17 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
 
   // --- Offer selection -----------------------------------------------------
   /**
-   * GET /api/v1/sponsorships/offer?clientType=...&sessionId=...&interactionKind=...
+   * GET /api/v1/sponsorships/offer?clientType=...&sessionId=...&interactionKind=...&availableSeconds=...
    *
    * `interactionKind` (optional, default WAIT) is the qualifying interaction
    * the client is presenting during. It is recorded on the OFFER_DISPLAYED
    * event and does not affect selection.
+   *
+   * `availableSeconds` (optional, whole seconds 0-3600) is the interaction's
+   * own estimate of the time it offers for presentation. It only gates VIDEO
+   * offers: one is eligible when a creative fits, and the longest fitting
+   * creative is served (never a longer one). Without it only CARD offers are
+   * eligible. It is never inferred from interactionKind or vice versa.
    *
    * Re-derives everything server-side (opt-in, client eligibility, campaign
    * liveness, budget, developer reward caps, display frequency cap) via the
@@ -180,6 +189,7 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         clientType,
         categoriesOptOut: developer.categoriesOptOut,
         betaMember: developer.betaJoinedAt !== null,
+        availableSeconds: parsed.data.availableSeconds,
       },
       displayHistory,
       budgetByCampaignId,
@@ -194,6 +204,14 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
     }
     const chosen = candidates.find((c) => c.offerId === winner.offerId)!;
     const offer = chosen.offer;
+    // VIDEO: the longest creative that fits the reported available seconds.
+    // Eligibility already guaranteed one exists; this picks the same one
+    // deterministically. The client never chooses the creative.
+    const creative =
+      offer.presentationMode === "VIDEO"
+        ? selectCreativeForWindow(offer.creatives, parsed.data.availableSeconds, MIN_VIDEO_WINDOW_SECONDS)
+        : null;
+    if (offer.presentationMode === "VIDEO" && !creative) return reply.send({ offer: null } satisfies SponsoredOfferResponse);
 
     const displayEventId = randomUUID();
     await prisma.sponsorshipEvent.create({
@@ -207,7 +225,15 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         // What gave the client this opportunity (schema default: WAIT).
         // Descriptive only: selection above does not depend on it.
         interactionKind: parsed.data.interactionKind,
-        metadata: { clientType },
+        // Which creative was served, for auditing (null for CARD offers).
+        creativeId: creative?.id ?? null,
+        metadata: creative
+          ? {
+              clientType,
+              availableSeconds: parsed.data.availableSeconds ?? null,
+              creativeDurationSeconds: creative.durationSeconds,
+            }
+          : { clientType },
       },
     });
 
@@ -218,13 +244,30 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         campaignId: winner.campaignId,
         title: offer.title,
         description: offer.description,
-        ctaUrl: offer.ctaUrl,
+        ctaUrl: resolveCtaUrl(offer.ctaUrl, displayEventId),
         requiredAction: offer.requiredAction,
         rewardType: winner.rewardType as NonNullable<SponsoredOfferResponse["offer"]>["rewardType"],
         rewardAmountUnits: winner.rewardAmountUnits,
         expiresAt: offer.expiresAt ? offer.expiresAt.toISOString() : null,
         campaignMode: chosen.mode ?? "LIVE",
         minEngagementSeconds: chosen.minEngagementSeconds,
+        presentationMode: offer.presentationMode,
+        creative: creative
+          ? {
+              id: creative.id,
+              kind: creative.kind,
+              url: creative.url,
+              mimeType: creative.mimeType,
+              fallback:
+                creative.fallbackUrl && creative.fallbackMimeType
+                  ? { url: creative.fallbackUrl, mimeType: creative.fallbackMimeType }
+                  : null,
+              posterUrl: creative.posterUrl,
+              durationSeconds: creative.durationSeconds,
+              width: creative.width,
+              height: creative.height,
+            }
+          : null,
       },
     };
     return reply.send(response);

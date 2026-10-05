@@ -1,4 +1,4 @@
-import { prisma, type Prisma, type SponsoredOffer, type SponsorshipCampaign } from "@devads/database";
+import { prisma, type OfferCreative, type Prisma, type SponsoredOffer, type SponsorshipCampaign } from "@devads/database";
 import type {
   BudgetUsage,
   DeveloperRewardCounts,
@@ -13,7 +13,10 @@ export function startOfUtcDay(now: Date): Date {
 }
 
 /** Maps a campaign row + one of its offers to the pure targeting candidate shape. */
-export function toSponsorshipCandidate(c: SponsorshipCampaign, offer: SponsoredOffer): SponsorshipCandidate {
+export function toSponsorshipCandidate(
+  c: SponsorshipCampaign,
+  offer: SponsoredOffer & { creatives?: OfferCreative[] }
+): SponsorshipCandidate {
   return {
     campaignId: c.id,
     offerId: offer.id,
@@ -33,16 +36,31 @@ export function toSponsorshipCandidate(c: SponsorshipCampaign, offer: SponsoredO
     developerLifetimeCap: c.developerLifetimeCap,
     frequencyCapPerDay: c.frequencyCapPerDay,
     mode: c.mode,
+    presentationMode: offer.presentationMode,
+    creatives: (offer.creatives ?? []).map((cr) => ({ id: cr.id, durationSeconds: cr.durationSeconds })),
   };
 }
 
 /**
+ * An offer's CTA may contain the literal token {displayEventId}; it is
+ * replaced with the server-issued display id so a landing page (such as a
+ * DevAds beta product page) can report interactions against this display.
+ * The id is opaque and useless without the developer's own session.
+ */
+export function resolveCtaUrl(ctaUrl: string, displayEventId: string): string {
+  return ctaUrl.split("{displayEventId}").join(encodeURIComponent(displayEventId));
+}
+
+/**
  * Loads APPROVED sponsorship campaigns with their oldest active, unexpired
- * offer as pure targeting candidates (analogue of loadCampaignCandidates).
+ * offer (and that offer's creatives) as pure targeting candidates
+ * (analogue of loadCampaignCandidates).
  */
 export async function loadSponsorshipCandidates(
   now: Date
-): Promise<Array<SponsorshipCandidate & { offer: SponsoredOffer; minEngagementSeconds: number | null }>> {
+): Promise<
+  Array<SponsorshipCandidate & { offer: SponsoredOffer & { creatives: OfferCreative[] }; minEngagementSeconds: number | null }>
+> {
   const campaigns = await prisma.sponsorshipCampaign.findMany({
     where: { status: "APPROVED" },
     include: {
@@ -50,6 +68,7 @@ export async function loadSponsorshipCandidates(
         where: { status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         orderBy: { createdAt: "asc" },
         take: 1,
+        include: { creatives: { orderBy: { durationSeconds: "asc" } } },
       },
     },
     orderBy: { createdAt: "asc" },

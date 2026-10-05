@@ -29,15 +29,27 @@ export type ProtocolClientProvider = () => ProtocolClient | null;
  * records it on the display) and whether it is still active (an offer is
  * presented only while it is). It never asks what the interaction is about.
  *
- * Capabilities are members of this interface. Future ones (for example how
- * many seconds a presentation could take, for time-bounded creatives) are
- * added as optional members so existing hosts keep compiling; none exist yet.
+ * Capabilities are members of this interface, added as optional members so
+ * existing hosts keep compiling. A capability belongs to what an
+ * interaction can actually know, not to its kind: availableSeconds() exists
+ * because some interactions (a terminal wait with a duration history) can
+ * estimate how long they will last, and others (a developer clicking "show
+ * me an opportunity") cannot.
  */
 export interface QualifyingInteraction {
-  /** Which kind of qualifying interaction this is. Only WAIT has client behavior today. */
+  /** Which kind of qualifying interaction this is. */
   readonly kind: QualifyingInteractionKind;
   /** True while an offer may still be presented for this interaction. */
   isActive(): boolean;
+  /**
+   * Optional: the host's estimate of whole seconds this interaction still
+   * offers for presentation, or undefined when it has no estimate right now.
+   * Omit it entirely for interactions with no time window. Only this number
+   * is sent; the server serves a VIDEO offer only when one of its creatives
+   * fits it, and the runtime re-checks the fit before presenting. Without it
+   * the interaction is offered CARD presentation only.
+   */
+  availableSeconds?(): number | undefined;
 }
 
 /**
