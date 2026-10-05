@@ -5,7 +5,10 @@ import {
   AdminSponsorshipEventsPageSchema,
   AdminSponsorshipEventsQuerySchema,
   CreateSponsorshipCampaignSchema,
+  DEFAULT_QUALIFYING_INTERACTION_KIND,
+  QualifyingInteractionKindSchema,
   RewardTypeSchema,
+  SponsoredOfferRequestSchema,
   SponsorshipEventRequestSchema,
   StartDevelopmentSessionSchema,
   UpdateSponsorshipCampaignSchema,
@@ -93,6 +96,46 @@ describe("sponsorship schemas", () => {
     expect(
       SponsorshipEventRequestSchema.safeParse({ eventId: "e1", type: "OFFER_DISPLAYED", displayEventId: "d1" }).success
     ).toBe(false);
+  });
+
+  describe("qualifying interaction kind", () => {
+    it("has exactly WAIT, DEVELOPER_INITIATED and OTHER", () => {
+      expect(QualifyingInteractionKindSchema.options).toEqual(["WAIT", "DEVELOPER_INITIATED", "OTHER"]);
+      expect(DEFAULT_QUALIFYING_INTERACTION_KIND).toBe("WAIT");
+    });
+
+    it("defaults an offer request with no kind to WAIT (backward compatible)", () => {
+      expect(SponsoredOfferRequestSchema.parse({ clientType: "AIDER" })).toEqual({
+        clientType: "AIDER",
+        interactionKind: "WAIT",
+      });
+      expect(SponsoredOfferRequestSchema.parse({ sessionId: "s1" }).interactionKind).toBe("WAIT");
+      expect(SponsoredOfferRequestSchema.parse({}).interactionKind).toBe("WAIT");
+    });
+
+    it("accepts every known kind on an offer request", () => {
+      for (const interactionKind of QualifyingInteractionKindSchema.options) {
+        expect(SponsoredOfferRequestSchema.parse({ clientType: "AIDER", interactionKind }).interactionKind).toBe(
+          interactionKind
+        );
+      }
+    });
+
+    it("rejects unknown or malformed kinds", () => {
+      for (const interactionKind of ["wait", "BUILD_COMPLETE", "", 1, null]) {
+        expect(SponsoredOfferRequestSchema.safeParse({ clientType: "AIDER", interactionKind }).success).toBe(false);
+      }
+    });
+
+    it("is not a client field on interaction events (inherited from the display server-side)", () => {
+      const parsed = SponsorshipEventRequestSchema.parse({
+        eventId: "e1",
+        type: "OFFER_OPENED",
+        displayEventId: "d1",
+        interactionKind: "DEVELOPER_INITIATED",
+      });
+      expect("interactionKind" in parsed).toBe(false);
+    });
   });
 
   it("only accepts a coarse activity category", () => {

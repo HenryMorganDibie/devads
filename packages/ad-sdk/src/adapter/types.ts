@@ -1,5 +1,5 @@
 import type { DevAdsClient } from "../client.js";
-import type { SponsoredOpportunity } from "../types.js";
+import type { QualifyingInteractionKind, SponsoredOpportunity } from "../types.js";
 
 /**
  * The slice of DevAdsClient the adapter runtime drives. Declared as a Pick so
@@ -19,12 +19,35 @@ export type ProtocolClient = Pick<
 export type ProtocolClientProvider = () => ProtocolClient | null;
 
 /**
- * A natural wait the host can already observe without inspecting anything
- * it does not own: a terminal command still running, an agent turn still in
- * progress, a build the tool itself started. The runtime only asks whether
- * it is still active, never what it is.
+ * One qualifying interaction within a development session: a moment the
+ * host can already observe, without inspecting anything it does not own,
+ * that gives it an opportunity to present a sponsored offer. A wait (a
+ * terminal command still running, an agent turn in progress) is one kind;
+ * the developer explicitly asking for an opportunity is another.
+ *
+ * The runtime asks only which kind it is (forwarded to the server, which
+ * records it on the display) and whether it is still active (an offer is
+ * presented only while it is). It never asks what the interaction is about.
+ *
+ * Capabilities are members of this interface. Future ones (for example how
+ * many seconds a presentation could take, for time-bounded creatives) are
+ * added as optional members so existing hosts keep compiling; none exist yet.
+ */
+export interface QualifyingInteraction {
+  /** Which kind of qualifying interaction this is. Only WAIT has client behavior today. */
+  readonly kind: QualifyingInteractionKind;
+  /** True while an offer may still be presented for this interaction. */
+  isActive(): boolean;
+}
+
+/**
+ * The pre-interaction-kind shape: a natural wait, identified only by
+ * whether it is still active. Kept so hosts written against the Phase 6
+ * runtime keep compiling; a WaitHandle is treated as a QualifyingInteraction
+ * of kind WAIT. New hosts should pass a QualifyingInteraction.
  */
 export interface WaitHandle {
+  readonly kind?: "WAIT";
   isActive(): boolean;
 }
 

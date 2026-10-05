@@ -697,3 +697,73 @@ Full design: [redemption.md](./redemption.md). Summary:
   unchanged.
 - No vendor (AI, cloud, API) redemption exists; each would be a new provider
   behind the same interface once an official mechanism and agreement exist.
+
+## Qualifying interaction kinds
+
+DevAds is not built around "AI wait time". The core model is:
+
+**development session -> sponsorship opportunity -> DevAds presentation
+surface -> verified developer engagement -> reward**
+
+A wait (a terminal command still running, an agent turn in progress) is one
+kind of *qualifying interaction* inside a development session: a moment the
+client can already observe that gives it an opportunity to present an
+offer. Until this change the adapter boundary only knew about waits
+(`WaitHandle { isActive() }`), so every later feature (video creatives, a
+"how long can we show this" question, new trigger types) would have been
+coupled to "a wait is active". The interaction kind makes the trigger a
+named, recorded dimension instead.
+
+| Kind | Meaning | Status |
+| --- | --- | --- |
+| `WAIT` | The developer is waiting on something the client observes. | **The only kind with real behavior.** The VS Code terminal-wait flow sends it explicitly. Also the server default. |
+| `DEVELOPER_INITIATED` | The developer explicitly asked to see an opportunity; not gated on a wait. | Placeholder. Accepted and recorded; no client sends it yet. |
+| `OTHER` | Extensible catch-all for future kinds (build complete, tool discovery, project creation, ...). | Placeholder. None of those are implemented. |
+
+Where it lives:
+
+- **Schema.** Enum `QualifyingInteractionKind` and a nullable
+  `SponsorshipEvent.interactionKind` column (migration
+  `20261005221513_qualifying_interaction_kind`, additive only). It is
+  recorded per event, not on `DevelopmentSession`: one session contains many
+  interactions of different kinds, while `DevelopmentSession.activityCategory`
+  stays the coarse, session-wide label it always was. Rows written before
+  the migration keep `NULL` ("recorded before kinds existed"); they are
+  deliberately not backfilled, because the web beta's developer-initiated
+  requests and VS Code's terminal waits can't be told apart after the fact.
+- **Wire.** `GET /api/v1/sponsorships/offer` takes an optional
+  `interactionKind` (`SponsoredOfferRequestSchema`, default `WAIT`, unknown
+  values are a 400). The server writes it on the `OFFER_DISPLAYED` event.
+  `POST /api/v1/sponsorships/events` has no such field: every skip, open,
+  interact or completion copies the kind from the display it references,
+  so a client can never relabel a display after the fact.
+- **SDK.** `requestSponsoredOpportunity({ interactionKind })` sends the kind
+  only when the caller gives one. The adapter runtime takes a
+  `QualifyingInteraction { kind, isActive() }` via
+  `SponsoredOfferRuntime.offerDuring()` and ends it with
+  `interactionEnded()`. The Phase 6 names still work: `WaitHandle`
+  (`{ isActive }`, optionally `kind: "WAIT"`) is accepted by
+  `offerDuringWait()`, which is exactly `offerDuring({ kind: "WAIT", ... })`,
+  and `waitEnded()` is `interactionEnded()`.
+- **VS Code.** `SponsoredOfferController` builds the terminal wait with
+  `terminalWait(tracker)`, a `QualifyingInteraction` of kind `WAIT`. Triggers,
+  timing, policy and UI are unchanged; the only observable difference is
+  `interactionKind=WAIT` on the offer request.
+
+The kind is descriptive. It changes no eligibility, selection, frequency cap,
+budget, reward or completion rule, and carries nothing about the developer's
+work. New capabilities that depend on the interaction (for example how many
+seconds a presentation could take, for time-bounded creatives) are meant to
+be added as optional members of `QualifyingInteraction`, answerable by any
+kind, rather than as wait-specific APIs.
+
+Not done here, deliberately:
+
+- **No new interaction kinds have behavior.** Build-complete, tool-discovery
+  and project-creation triggers are future work. The video-creative work is
+  to be rebased onto this abstraction first.
+- **The web beta still sends no kind,** so its developer-initiated requests
+  are recorded as `WAIT` by the server default. Passing
+  `interactionKind: "DEVELOPER_INITIATED"` from `apps/web/lib/betaOffer.ts` is
+  a one-line follow-up that was kept out of this change.
+- **No read path exposes the kind yet** (admin activity DTOs, sponsor stats).

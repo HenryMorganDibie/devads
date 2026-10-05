@@ -130,7 +130,11 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
 
   // --- Offer selection -----------------------------------------------------
   /**
-   * GET /api/v1/sponsorships/offer?clientType=...&sessionId=...
+   * GET /api/v1/sponsorships/offer?clientType=...&sessionId=...&interactionKind=...
+   *
+   * `interactionKind` (optional, default WAIT) is the qualifying interaction
+   * the client is presenting during. It is recorded on the OFFER_DISPLAYED
+   * event and does not affect selection.
    *
    * Re-derives everything server-side (opt-in, client eligibility, campaign
    * liveness, budget, developer reward caps, display frequency cap) via the
@@ -200,6 +204,9 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
         campaignId: winner.campaignId,
         developerId: developer.id,
         sessionId,
+        // What gave the client this opportunity (schema default: WAIT).
+        // Descriptive only: selection above does not depend on it.
+        interactionKind: parsed.data.interactionKind,
         metadata: { clientType },
       },
     });
@@ -282,6 +289,9 @@ export async function registerSponsorshipRoutes(app: FastifyInstance) {
       developerId: developer.id,
       sessionId,
       displayEventId: display.eventId,
+      // Inherited from the server-recorded display, never taken from the
+      // request: every event about one display shares its interaction kind.
+      interactionKind: display.interactionKind,
       metadata: body.metadata as Prisma.InputJsonValue | undefined,
     };
 

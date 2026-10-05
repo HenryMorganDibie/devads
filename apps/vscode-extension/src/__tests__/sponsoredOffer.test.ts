@@ -4,6 +4,7 @@ import {
   canClaimCompletionOnOpen,
   formatReward,
   SponsoredOfferController,
+  terminalWait,
   type OfferTickInput,
 } from "../sponsoredOffer";
 import type { SponsorshipApi } from "../sponsorshipClient";
@@ -79,7 +80,7 @@ describe("SponsoredOfferController: requesting and showing", () => {
   it("requests an offer with the session id and shows it once the wait threshold has passed", async () => {
     const { client, view, controller } = setup();
     await controller.maybeRequest(tracker(), TICK);
-    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1" });
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1", interactionKind: "WAIT" });
     expect(view.show).toHaveBeenCalledWith(offer());
     expect(controller.getCurrent()?.displayEventId).toBe("disp_1");
   });
@@ -89,13 +90,22 @@ describe("SponsoredOfferController: requesting and showing", () => {
     session.currentSessionId.mockReturnValueOnce(null);
     await controller.maybeRequest(tracker(), TICK);
     expect(session.start).toHaveBeenCalled();
-    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1" });
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1", interactionKind: "WAIT" });
+  });
+
+  it("tags the terminal wait explicitly as the WAIT qualifying-interaction kind, active while the command runs", () => {
+    const t = tracker();
+    const interaction = terminalWait(t);
+    expect(interaction.kind).toBe("WAIT");
+    expect(interaction.isActive()).toBe(true);
+    t.state.running = false;
+    expect(interaction.isActive()).toBe(false);
   });
 
   it("falls back to the client type alone (SDK default VS_CODE) when no session is available", async () => {
     const { client, controller } = setup({ sessionId: null });
     await controller.maybeRequest(tracker(), TICK);
-    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({});
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ interactionKind: "WAIT" });
   });
 
   it.each<[string, Partial<OfferTickInput>, ReturnType<typeof tracker>]>([

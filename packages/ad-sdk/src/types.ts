@@ -3,6 +3,7 @@ import type {
   ClientSponsorshipEventTypeSchema,
   DevClientTypeDTO,
   DevelopmentSessionDTO,
+  QualifyingInteractionKindDTO,
   RedeemRewardResponse,
   RewardRedemptionDTO,
   RewardRedemptionListResponse,
@@ -27,6 +28,11 @@ import type {
 /** Which tool the developer is using (VS_CODE, CLAUDE_CODE, CODEX, ... OTHER). */
 export type DevClientType = DevClientTypeDTO;
 export type RewardType = RewardTypeDTO;
+/**
+ * What gave the client an opportunity to present an offer within a
+ * development session: WAIT, DEVELOPER_INITIATED or OTHER (shared enum).
+ */
+export type QualifyingInteractionKind = QualifyingInteractionKindDTO;
 
 export type DevelopmentSession = DevelopmentSessionDTO;
 /** A server-selected sponsored offer. `displayEventId` is the server-issued id every later event must reference. */
@@ -82,6 +88,8 @@ export interface OpportunityContext {
   /** When given, the server uses the session's client type. */
   sessionId?: string;
   clientType?: DevClientType;
+  /** What gave the client this opportunity. Omitted = the server records WAIT. */
+  interactionKind?: QualifyingInteractionKind;
 }
 
 export interface OpportunityListFilter {

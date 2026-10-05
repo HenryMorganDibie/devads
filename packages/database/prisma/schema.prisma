@@ -516,6 +516,20 @@ enum SponsorshipEventType {
   OFFER_COMPLETED
 }
 
+/// What gave the client an opportunity to present a sponsored offer within a
+/// development session. Recorded per offer display, not per session: one
+/// session can contain many interactions of different kinds.
+enum QualifyingInteractionKind {
+  // The developer is waiting on something the client can observe (a
+  // terminal command, an agent turn). The only kind with real client
+  // behavior today, and the server default when a client sends none.
+  WAIT
+  // The developer explicitly asked to see an opportunity; not gated on a wait.
+  DEVELOPER_INITIATED
+  // Extensible catch-all for future kinds (build complete, tool discovery, ...).
+  OTHER
+}
+
 enum RewardStatus {
   PENDING
   APPROVED
@@ -540,7 +554,10 @@ model DevelopmentSession {
   clientType       DevClientType
   clientVersion    String?
   status           DevSessionStatus @default(ACTIVE)
-  activityCategory String? // coarse label only (e.g. "build", "test"), validated server-side
+  // Coarse session-wide label only (e.g. "build", "test"), validated
+  // server-side. Which interaction triggered a given offer is recorded per
+  // event in SponsorshipEvent.interactionKind, not here.
+  activityCategory String?
   startedAt        DateTime         @default(now())
   endedAt          DateTime?
 
@@ -639,6 +656,11 @@ model SponsorshipEvent {
   // For client-reported events: the server-issued OFFER_DISPLAYED eventId
   // this interaction refers to.
   displayEventId String?
+  // The qualifying interaction the offer was requested during. Set by the
+  // server on OFFER_DISPLAYED (client value, defaulting to WAIT) and copied
+  // from that display onto every event that refers to it. Null only on
+  // rows recorded before interaction kinds existed.
+  interactionKind QualifyingInteractionKind?
   metadata    Json?
   createdAt   DateTime             @default(now())
 

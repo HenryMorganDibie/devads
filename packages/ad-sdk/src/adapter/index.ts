@@ -1,8 +1,9 @@
 // DevAds adapter runtime: the host-agnostic half of every DevAds client.
 //
 // A client adapter (an editor extension, a CLI, an agent integration)
-// implements AdapterHost for its own UI and supplies WaitHandles for waits it
-// can already observe. Sessions, the offer lifecycle, event correlation,
+// implements AdapterHost for its own UI and supplies a QualifyingInteraction
+// (today: a WAIT it can already observe) for each opportunity to present an
+// offer. Sessions, the offer lifecycle, event correlation,
 // the completion policy and failure handling live here, so adding a client
 // never touches the sponsorship core, reward accounting or this runtime.
 
@@ -16,4 +17,11 @@ export {
   type ClientIntegration,
   type IntegrationStatus,
 } from "./integrations.js";
-export type { AdapterHost, ProtocolClient, ProtocolClientProvider, SessionProvider, WaitHandle } from "./types.js";
+export type {
+  AdapterHost,
+  ProtocolClient,
+  ProtocolClientProvider,
+  QualifyingInteraction,
+  SessionProvider,
+  WaitHandle,
+} from "./types.js";

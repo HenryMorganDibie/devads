@@ -201,7 +201,8 @@ describe("a new client adapter needs only a host and a client type", () => {
     ]);
     // Only coarse protocol fields leave the adapter; never a reward amount or anything about the developer's work.
     expect(server.requests[0].body).toEqual({ clientType: "CUSTOM_AGENT", clientVersion: "0.0.1" });
-    expect(server.requests[1].query).toEqual({ clientType: "CUSTOM_AGENT", sessionId: "sess_x" });
+    // The legacy WaitHandle this adapter passes is tagged as the WAIT interaction kind.
+    expect(server.requests[1].query).toEqual({ clientType: "CUSTOM_AGENT", sessionId: "sess_x", interactionKind: "WAIT" });
     expect(server.requests[2].body).toEqual({ eventId: "evt_1", type: "OFFER_OPENED", displayEventId: "disp_x", sessionId: "sess_x" });
     expect(server.requests[3].body).toEqual({ eventId: "evt_2", type: "OFFER_COMPLETED", displayEventId: "disp_x", sessionId: "sess_x" });
     for (const r of server.requests) {

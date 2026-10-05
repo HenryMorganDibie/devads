@@ -1,4 +1,9 @@
-import { SponsoredOfferRuntime, type SessionProvider, type SponsoredOpportunity } from "@devads/ad-sdk";
+import {
+  SponsoredOfferRuntime,
+  type QualifyingInteraction,
+  type SessionProvider,
+  type SponsoredOpportunity,
+} from "@devads/ad-sdk";
 import { isEligibleForAdRequest } from "./eligibility";
 import type { SponsorshipApi } from "./sponsorshipClient";
 
@@ -21,8 +26,8 @@ import type { SponsorshipApi } from "./sponsorshipClient";
  *  - Policy: at most one request per command run, and no sponsored offer
  *    while a standard ad is already showing for the same wait.
  *
- * What is sent to the SDK: the session id and the offer's server-issued
- * displayEventId, nothing else. No command line, language, file path,
+ * What is sent to the SDK: the session id, the interaction kind (always
+ * WAIT here) and the offer's server-issued displayEventId, nothing else. No command line, language, file path,
  * workspace info, source code or prompt content is ever passed.
  */
 
@@ -32,6 +37,15 @@ export { canClaimCompletionOnOpen, formatReward, rewardLabel } from "@devads/ad-
 export interface WaitSignal {
   elapsedSeconds(): number;
   isStillRunning(): boolean;
+}
+
+/**
+ * The qualifying interaction this extension observes: a terminal command
+ * that is still running. Explicitly the WAIT kind; it is active exactly as
+ * long as the command runs.
+ */
+export function terminalWait(tracker: Pick<WaitSignal, "isStillRunning">): QualifyingInteraction {
+  return { kind: "WAIT", isActive: () => tracker.isStillRunning() };
 }
 
 export interface SponsoredOfferView {
@@ -91,7 +105,7 @@ export class SponsoredOfferController {
 
   /** The wait is over: the offer goes away with it (never shown longer than the wait). */
   onCommandEnd(): void {
-    this.runtime.waitEnded();
+    this.runtime.interactionEnded();
   }
 
   /**
@@ -116,7 +130,8 @@ export class SponsoredOfferController {
       // screen for this wait, don't stack a sponsored offer next to it.
       if (input.standardAdShowing) return;
 
-      await this.runtime.offerDuringWait({ isActive: () => tracker.isStillRunning() });
+      // A running terminal command is a WAIT-kind qualifying interaction.
+      await this.runtime.offerDuring(terminalWait(tracker));
     } catch {
       this.deps.log?.("sponsored offer tick failed: unexpected_error");
     }

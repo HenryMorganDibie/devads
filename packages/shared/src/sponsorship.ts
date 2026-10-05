@@ -127,9 +127,33 @@ export type DevelopmentSessionDTO = z.infer<typeof DevelopmentSessionDTOSchema>;
 // Offer selection + events
 // ---------------------------------------------------------------------------
 
+/**
+ * What gave the client an opportunity to present an offer within a
+ * development session (mirrors the Prisma QualifyingInteractionKind enum).
+ * The model is: development session -> qualifying interaction (sponsorship
+ * opportunity) -> presentation surface -> verified engagement -> reward.
+ *
+ *  - WAIT: the developer is waiting on something the client observes (a
+ *    terminal command, an agent turn). The only kind with client behavior
+ *    today.
+ *  - DEVELOPER_INITIATED: the developer explicitly asked to see an
+ *    opportunity; not gated on a wait.
+ *  - OTHER: extensible catch-all for future kinds (none implemented).
+ *
+ * The kind is descriptive only: it changes no eligibility, selection, cap or
+ * reward rule, and carries no developer content.
+ */
+export const QualifyingInteractionKindSchema = z.enum(["WAIT", "DEVELOPER_INITIATED", "OTHER"]);
+export type QualifyingInteractionKindDTO = z.infer<typeof QualifyingInteractionKindSchema>;
+
+/** Applied when a client sends no kind: every client in production before kinds existed requested offers during waits. */
+export const DEFAULT_QUALIFYING_INTERACTION_KIND: QualifyingInteractionKindDTO = "WAIT";
+
 export const SponsoredOfferRequestSchema = z.object({
   clientType: DevClientTypeSchema.optional(),
   sessionId: z.string().min(1).optional(),
+  /** Optional on the wire for backward compatibility; omitted means WAIT. */
+  interactionKind: QualifyingInteractionKindSchema.default(DEFAULT_QUALIFYING_INTERACTION_KIND),
 });
 export type SponsoredOfferRequest = z.infer<typeof SponsoredOfferRequestSchema>;
 
@@ -186,6 +210,11 @@ export const SponsoredOfferListResponseSchema = z.object({
 });
 export type SponsoredOfferListResponse = z.infer<typeof SponsoredOfferListResponseSchema>;
 
+// No interactionKind here on purpose: an interaction event (skip, open,
+// interact, complete) always belongs to the display it references, so the
+// server copies the kind from that server-recorded OFFER_DISPLAYED row. A
+// client-sent value is stripped like any other unknown key and can never
+// relabel a display.
 export const SponsorshipEventRequestSchema = z.object({
   eventId: z.string().min(1).max(128),
   type: ClientSponsorshipEventTypeSchema,

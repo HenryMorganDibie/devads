@@ -101,7 +101,7 @@ describe("createSponsorshipClient (real @devads/ad-sdk, fake fetch)", () => {
     }
   });
 
-  it("privacy: an end-to-end offer flow sends only client type/version and session/offer ids", async () => {
+  it("privacy: an end-to-end offer flow sends only client type/version, interaction kind and session/offer ids", async () => {
     const sent: Array<{ url: string; body?: unknown }> = [];
     const fetchImpl = vi.fn(async (url: string, init: { body?: string }) => {
       sent.push({ url, body: init.body ? JSON.parse(init.body) : undefined });
@@ -139,7 +139,8 @@ describe("createSponsorshipClient (real @devads/ad-sdk, fake fetch)", () => {
       "/api/v1/sponsorships/events",
       "/api/v1/sponsorships/events",
     ]);
-    expect(new URL(sent[1].url).searchParams.toString()).toBe("clientType=VS_CODE&sessionId=sess_1");
+    // The interaction kind is a fixed enum value (the terminal wait is WAIT), never anything about the command.
+    expect(new URL(sent[1].url).searchParams.toString()).toBe("clientType=VS_CODE&sessionId=sess_1&interactionKind=WAIT");
     expect(sent[0].body).toEqual({ clientType: "VS_CODE", clientVersion: "0.1.0" });
     for (const event of sent.slice(2)) {
       expect(Object.keys(event.body as object).sort()).toEqual(["displayEventId", "eventId", "sessionId", "type"]);

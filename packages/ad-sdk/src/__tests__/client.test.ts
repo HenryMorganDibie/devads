@@ -199,6 +199,22 @@ describe("DevAdsClient.requestSponsoredOpportunity", () => {
     expect(calls[0].url).toBe(`${BASE}/api/v1/sponsorships/offer?clientType=VS_CODE`);
   });
 
+  it("sends interactionKind only when the caller gives one (the server defaults to WAIT)", async () => {
+    const { fetch, calls } = mockFetch([{ body: { offer: null } }, { body: { offer: null } }]);
+    const client = makeClient(fetch);
+    await client.requestSponsoredOpportunity({ sessionId: "sess_1" });
+    await client.requestSponsoredOpportunity({ sessionId: "sess_1", interactionKind: "DEVELOPER_INITIATED" });
+    expect(new URL(calls[0].url).searchParams.has("interactionKind")).toBe(false);
+    expect(new URL(calls[1].url).searchParams.get("interactionKind")).toBe("DEVELOPER_INITIATED");
+  });
+
+  it("rejects an unknown interactionKind without sending", async () => {
+    const { fetch, calls } = mockFetch([{ body: { offer: null } }]);
+    const bogus = { interactionKind: "BUILD_COMPLETE" } as unknown as Parameters<DevAdsClient["requestSponsoredOpportunity"]>[0];
+    expect((await rejection(makeClient(fetch).requestSponsoredOpportunity(bogus))).code).toBe("invalid_request");
+    expect(calls).toHaveLength(0);
+  });
+
   it("returns null when the server has no offer", async () => {
     const { fetch } = mockFetch([{ body: { offer: null } }]);
     expect(await makeClient(fetch).requestSponsoredOpportunity()).toBeNull();
