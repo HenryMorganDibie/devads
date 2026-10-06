@@ -1,7 +1,43 @@
 import type { SponsoredOpportunity } from "../types.js";
 import { describeError, isRetryableCompletionError, isStaleSessionError } from "./errors.js";
 import { canClaimCompletionOnOpen, formatReward } from "./rewards.js";
-import type { AdapterHost, ProtocolClient, ProtocolClientProvider, SessionProvider, WaitHandle } from "./types.js";
+import type {
+  AdapterHost,
+  ProtocolClient,
+  ProtocolClientProvider,
+  QualifyingInteraction,
+  SessionProvider,
+  WaitHandle,
+} from "./types.js";
+
+/**
+ * Whole seconds the interaction reports as available, clamped to the
+ * protocol's 0-3600 range, or undefined when the interaction has no such
+ * capability, no estimate right now, or its estimate throws.
+ */
+function availableSecondsOf(interaction: QualifyingInteraction): number | undefined {
+  try {
+    if (typeof interaction.availableSeconds !== "function") return undefined;
+    const v = interaction.availableSeconds();
+    if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
+    return Math.min(3600, Math.max(0, Math.floor(v)));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Client-side defensive re-check (non-authoritative: the server already chose
+ * a creative that fit when it answered). A VIDEO offer is presentable only
+ * with a creative no longer than the seconds still available. CARD offers
+ * (and offers from older servers without a presentation mode) always fit.
+ * An interaction that reports no available seconds never fits a VIDEO offer.
+ */
+export function fitsWindow(offer: SponsoredOpportunity, availableSeconds: number | undefined): boolean {
+  if (offer.presentationMode !== "VIDEO") return true;
+  if (!offer.creative || availableSeconds === undefined) return false;
+  return offer.creative.durationSeconds <= availableSeconds;
+}
 
 export interface SponsoredOfferRuntimeDeps {
   getClient: ProtocolClientProvider;
@@ -17,21 +53,24 @@ interface DisplayedOffer {
 
 /**
  * The host-agnostic sponsored-offer lifecycle every DevAds client shares:
- * request an offer during a natural wait, present it only while that wait
- * is still active, report skip / interact / open against the server-issued
- * displayEventId, and claim completion only when opening the link is the
- * whole qualifying action. It never throws; any failure degrades to "no
- * offer" and a log line.
+ * request an offer during a qualifying interaction (today, in practice, a
+ * natural wait), present it only while that interaction is still active,
+ * report skip / interact / open against the server-issued displayEventId,
+ * and claim completion only when opening the link is the whole qualifying
+ * action. It never throws; any failure degrades to "no offer" and a log
+ * line.
  *
- * What is sent: the session id and the displayEventId, nothing else. The
- * runtime never sees, and has no way to send, source code, prompts, model
- * output, file paths, commands or secrets. It makes no economic decision:
- * the server selects offers, enforces caps and budgets, and decides whether
- * a completion is rewarded.
+ * What is sent: the session id, the interaction's kind, the whole number of
+ * seconds it reports as available (only when it has that capability) and
+ * the displayEventId, nothing else. The runtime never sees, and has no way to
+ * send, source code, prompts, model output, file paths, commands or
+ * secrets. It makes no economic decision: the server selects offers,
+ * enforces caps and budgets, and decides whether a completion is rewarded.
+ * The interaction kind is recorded for the display and changes none of that.
  *
- * Deciding *when* a wait is worth an offer (minimum duration, once per
- * wait, one promotional surface at a time with other UI) is the host's
- * policy and happens before offerDuringWait() is called.
+ * Deciding *when* an interaction is worth an offer (minimum wait duration,
+ * once per wait, one promotional surface at a time with other UI) is the
+ * host's policy and happens before offerDuring() is called.
  */
 export class SponsoredOfferRuntime {
   private current: DisplayedOffer | null = null;
@@ -47,11 +86,12 @@ export class SponsoredOfferRuntime {
   }
 
   /**
-   * Requests an offer for this wait and presents it if the wait is still
-   * active when the response arrives. Does nothing while an offer is already
+   * Requests an offer for this qualifying interaction and presents it if the
+   * interaction is still active when the response arrives. The interaction's
+   * kind is sent with the request. Does nothing while an offer is already
    * showing (one sponsored offer at a time). Never throws.
    */
-  async offerDuringWait(wait: WaitHandle): Promise<void> {
+  async offerDuring(interaction: QualifyingInteraction): Promise<void> {
     try {
       if (this.current) return;
       const client = this.client();
@@ -59,17 +99,29 @@ export class SponsoredOfferRuntime {
 
       const sessionId = this.deps.session.currentSessionId() ?? (await this.deps.session.start()) ?? undefined;
 
+      // Sent only when the interaction can estimate it; otherwise the server
+      // serves CARD offers only.
+      const available = availableSecondsOf(interaction);
       let offer: SponsoredOpportunity | null;
       try {
-        offer = await client.requestSponsoredOpportunity(sessionId ? { sessionId } : {});
+        offer = await client.requestSponsoredOpportunity({
+          ...(sessionId ? { sessionId } : {}),
+          interactionKind: interaction.kind,
+          ...(available !== undefined ? { availableSeconds: available } : {}),
+        });
       } catch (err) {
         if (isStaleSessionError(err)) this.deps.session.invalidate();
         this.log(`sponsored offer request failed: ${describeError(err)}`);
         return;
       }
 
-      // Never show anything after the wait is over.
-      if (!offer || !wait.isActive()) return;
+      // Never show anything after the interaction is over.
+      if (!offer || !interaction.isActive()) return;
+      // Never start a video that no longer fits: time passed during the request.
+      if (!fitsWindow(offer, availableSecondsOf(interaction))) {
+        this.log("sponsored video not presented: no longer fits the available time");
+        return;
+      }
 
       this.current = { offer, sessionId };
       this.lastShown = this.current;
@@ -79,9 +131,23 @@ export class SponsoredOfferRuntime {
     }
   }
 
-  /** The wait is over: the offer goes away with it, without reporting a skip. */
-  waitEnded(): void {
+  /**
+   * offerDuring() for a wait. Accepts the pre-interaction-kind WaitHandle
+   * (`{ isActive }`), which is always the WAIT kind. Same behavior as
+   * offerDuring({ kind: "WAIT", isActive }).
+   */
+  offerDuringWait(wait: WaitHandle): Promise<void> {
+    return this.offerDuring({ kind: "WAIT", isActive: () => wait.isActive() });
+  }
+
+  /** The interaction is over: the offer goes away with it, without reporting a skip. */
+  interactionEnded(): void {
     this.clear();
+  }
+
+  /** The wait is over. Same as interactionEnded(). */
+  waitEnded(): void {
+    this.interactionEnded();
   }
 
   /** Developer opened the offer's details. */

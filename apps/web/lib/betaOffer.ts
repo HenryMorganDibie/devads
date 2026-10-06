@@ -51,7 +51,11 @@ export async function requestWebOpportunity(
   for (let attempt = 0; ; attempt++) {
     const sessionId = await webSessionId(client);
     try {
-      const offer = await client.requestSponsoredOpportunity({ clientType: "WEB", sessionId });
+      const offer = await client.requestSponsoredOpportunity({
+        clientType: "WEB",
+        sessionId,
+        interactionKind: "DEVELOPER_INITIATED",
+      });
       return { offer, sessionId };
     } catch (err) {
       if (attempt === 0 && isStaleSession(err)) {

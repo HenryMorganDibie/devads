@@ -1,3 +1,4 @@
+import { selectCreativeForWindow, type CreativeOption } from "./creativeSelection.js";
 import { countImpressionsToday } from "./frequencyCap.js";
 import type { BudgetUsage, ImpressionHistoryEntry } from "./types.js";
 
@@ -47,6 +48,10 @@ export interface SponsorshipCandidate {
   frequencyCapPerDay: number | null;
   /** LIVE (sponsor-funded, the default) or BETA (DevAds-funded developer beta). */
   mode?: "LIVE" | "BETA";
+  /** CARD (default) or VIDEO. A VIDEO offer is only eligible when one of its creatives fits the available seconds. */
+  presentationMode?: "CARD" | "VIDEO";
+  /** VIDEO offers: the creatives available for this offer. */
+  creatives?: CreativeOption[];
 }
 
 export interface SponsorshipDeveloperContext {
@@ -57,6 +62,12 @@ export interface SponsorshipDeveloperContext {
   categoriesOptOut?: string[];
   /** Developer has joined the developer beta; BETA campaigns only serve members. */
   betaMember?: boolean;
+  /**
+   * Seconds the client's qualifying interaction reports as available for
+   * presentation; required for VIDEO offers. Absent for interactions that
+   * have no time window (for example a developer-initiated request).
+   */
+  availableSeconds?: number;
 }
 
 /** Rewarded (EARNED) completions for this developer, per campaign. */
@@ -115,11 +126,12 @@ export function isSponsorshipLive(c: LivenessFields, now: Date): boolean {
  * own opt-out list (no platform-defined category list exists).
  */
 export function isDeveloperEligibleForSponsorship(
-  c: Pick<SponsorshipCandidate, "sponsorCategory" | "eligibleClientTypes" | "mode">,
+  c: Pick<SponsorshipCandidate, "sponsorCategory" | "eligibleClientTypes" | "mode" | "presentationMode" | "creatives">,
   dev: SponsorshipDeveloperContext
 ): boolean {
   if (!dev.enabled) return false;
   if (c.mode === "BETA" && !dev.betaMember) return false;
+  if (c.presentationMode === "VIDEO" && !selectCreativeForWindow(c.creatives ?? [], dev.availableSeconds)) return false;
   if (!isClientTypeEligible(c.eligibleClientTypes, dev.clientType)) return false;
   if (c.sponsorCategory) {
     const optOut = (dev.categoriesOptOut ?? []).map((x) => x.toLowerCase());
@@ -178,7 +190,8 @@ export function developerRewardCapReached(
 /**
  * Full pipeline: live -> developer/client eligible -> budget remaining ->
  * developer reward caps -> display frequency cap -> highest sponsor charge
- * wins (ties keep the first candidate, i.e. the caller's ordering).
+ * wins (ties: a fitting VIDEO offer, then the offer shown least today, then
+ * the caller's ordering).
  */
 export function selectSponsoredOffer(input: SelectSponsoredOfferInput): SponsorshipCandidate | null {
   const now = input.now ?? new Date();
@@ -198,7 +211,19 @@ export function selectSponsoredOffer(input: SelectSponsoredOfferInput): Sponsors
   });
 
   if (eligible.length === 0) return null;
-  return eligible.reduce((best, c) => (c.sponsorChargeCents > best.sponsorChargeCents ? c : best), eligible[0]);
+  // Ranking: highest sponsor charge wins. Ties, which are otherwise
+  // arbitrary, prefer (1) a VIDEO offer (only a fitting one survives the
+  // filter above, so it uses the available seconds the client reported),
+  // then (2) the offer shown to this developer least often today, so equal
+  // campaigns rotate, then (3) caller order.
+  const shownToday = (c: SponsorshipCandidate) => countImpressionsToday(input.displayHistory, now, c.campaignId);
+  const fitsVideo = (c: SponsorshipCandidate) => (c.presentationMode === "VIDEO" ? 1 : 0);
+  const better = (a: SponsorshipCandidate, b: SponsorshipCandidate) => {
+    if (a.sponsorChargeCents !== b.sponsorChargeCents) return a.sponsorChargeCents > b.sponsorChargeCents;
+    if (fitsVideo(a) !== fitsVideo(b)) return fitsVideo(a) > fitsVideo(b);
+    return shownToday(a) < shownToday(b);
+  };
+  return eligible.reduce((best, c) => (better(c, best) ? c : best), eligible[0]);
 }
 
 export interface ListEligibleSponsoredOffersInput {
@@ -232,11 +257,14 @@ export function listEligibleSponsoredOffers(input: ListEligibleSponsoredOffersIn
   return input.candidates.filter((c) => {
     if (!isSponsorshipLive(c, now)) return false;
 
+    // A listing is not a display: no interaction or available time is
+    // involved, so the VIDEO-fits rule (a presentation rule) does not apply.
+    const browse = { ...c, presentationMode: undefined };
     const eligible =
       clientType === undefined
         ? // Same opt-in and category rules, minus the client-type restriction.
-          isDeveloperEligibleForSponsorship({ ...c, eligibleClientTypes: [] }, { ...input.dev, clientType: "" })
-        : isDeveloperEligibleForSponsorship(c, { ...input.dev, clientType });
+          isDeveloperEligibleForSponsorship({ ...browse, eligibleClientTypes: [] }, { ...input.dev, clientType: "" })
+        : isDeveloperEligibleForSponsorship(browse, { ...input.dev, clientType });
     if (!eligible) return false;
 
     const usage = input.budgetByCampaignId[c.campaignId] ?? { spentTodayCents: 0, spentTotalCents: 0 };

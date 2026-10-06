@@ -697,3 +697,243 @@ Full design: [redemption.md](./redemption.md). Summary:
   unchanged.
 - No vendor (AI, cloud, API) redemption exists; each would be a new provider
   behind the same interface once an official mechanism and agreement exist.
+
+## Qualifying interaction kinds
+
+DevAds is not built around "AI wait time". The core model is:
+
+**development session -> sponsorship opportunity -> DevAds presentation
+surface -> verified developer engagement -> reward**
+
+A wait (a terminal command still running, an agent turn in progress) is one
+kind of *qualifying interaction* inside a development session: a moment the
+client can already observe that gives it an opportunity to present an
+offer. Until this change the adapter boundary only knew about waits
+(`WaitHandle { isActive() }`), so every later feature (video creatives, a
+"how long can we show this" question, new trigger types) would have been
+coupled to "a wait is active". The interaction kind makes the trigger a
+named, recorded dimension instead.
+
+| Kind | Meaning | Status |
+| --- | --- | --- |
+| `WAIT` | The developer is waiting on something the client observes. | **The only kind with real behavior.** The VS Code terminal-wait flow sends it explicitly. Also the server default. |
+| `DEVELOPER_INITIATED` | The developer explicitly asked to see an opportunity; not gated on a wait. | Placeholder. Accepted and recorded; no client sends it yet. |
+| `OTHER` | Extensible catch-all for future kinds (build complete, tool discovery, project creation, ...). | Placeholder. None of those are implemented. |
+
+Where it lives:
+
+- **Schema.** Enum `QualifyingInteractionKind` and a nullable
+  `SponsorshipEvent.interactionKind` column (migration
+  `20261005221513_qualifying_interaction_kind`, additive only). It is
+  recorded per event, not on `DevelopmentSession`: one session contains many
+  interactions of different kinds, while `DevelopmentSession.activityCategory`
+  stays the coarse, session-wide label it always was. Rows written before
+  the migration keep `NULL` ("recorded before kinds existed"); they are
+  deliberately not backfilled, because the web beta's developer-initiated
+  requests and VS Code's terminal waits can't be told apart after the fact.
+- **Wire.** `GET /api/v1/sponsorships/offer` takes an optional
+  `interactionKind` (`SponsoredOfferRequestSchema`, default `WAIT`, unknown
+  values are a 400). The server writes it on the `OFFER_DISPLAYED` event.
+  `POST /api/v1/sponsorships/events` has no such field: every skip, open,
+  interact or completion copies the kind from the display it references,
+  so a client can never relabel a display after the fact.
+- **SDK.** `requestSponsoredOpportunity({ interactionKind })` sends the kind
+  only when the caller gives one. The adapter runtime takes a
+  `QualifyingInteraction { kind, isActive() }` via
+  `SponsoredOfferRuntime.offerDuring()` and ends it with
+  `interactionEnded()`. The Phase 6 names still work: `WaitHandle`
+  (`{ isActive }`, optionally `kind: "WAIT"`) is accepted by
+  `offerDuringWait()`, which is exactly `offerDuring({ kind: "WAIT", ... })`,
+  and `waitEnded()` is `interactionEnded()`.
+- **VS Code.** `SponsoredOfferController` builds the terminal wait with
+  `terminalWait(tracker)`, a `QualifyingInteraction` of kind `WAIT`. Triggers,
+  timing, policy and UI are unchanged; the only observable difference is
+  `interactionKind=WAIT` on the offer request.
+
+The kind is descriptive. It changes no eligibility, selection, frequency cap,
+budget, reward or completion rule, and carries nothing about the developer's
+work. New capabilities that depend on the interaction (for example how many
+seconds a presentation could take, for time-bounded creatives) are meant to
+be added as optional members of `QualifyingInteraction`, answerable by any
+kind, rather than as wait-specific APIs.
+
+Not done here, deliberately:
+
+- **No new interaction kinds have behavior.** Build-complete, tool-discovery
+  and project-creation triggers are future work. The video-creative work is
+  to be rebased onto this abstraction first.
+- **The web beta originally sent no kind,** so its developer-initiated
+  requests were recorded as `WAIT` by the server default. That one-line
+  follow-up has since landed: `apps/web/lib/betaOffer.ts` now sends
+  `interactionKind: "DEVELOPER_INITIATED"`.
+- **No read path exposes the kind yet** (admin activity DTOs, sponsor stats).
+
+## Presentation modes, creatives and available seconds
+
+This section ports the first-party beta video work (originally built on the
+unmerged `feat/beta-video-ads` branch, which coupled it to waits) onto the
+qualifying-interaction model above. Product and creative details are in
+[beta-video-ads.md](./beta-video-ads.md).
+
+### Model
+
+- **`PresentationMode`** (`CARD` | `VIDEO`) on `SponsoredOffer`
+  (`presentationMode`, default `CARD`). Every offer that existed before is
+  `CARD`, which is exactly how every client presented it.
+- **`CreativeKind`** (`VIDEO`; new kinds extend the enum without changing the
+  offer shape) and **`OfferCreative`**: one row per creative length of an
+  offer (`@@unique([offerId, durationSeconds])`), with a preferred source
+  (`url`/`mimeType`, WebM/VP9 for video), an optional fallback source
+  (`fallbackUrl`/`fallbackMimeType`, H.264 MP4), `posterUrl`, `width`,
+  `height` and the asset's `sha256`. Database CHECK constraints keep every
+  row a real, bounded asset: duration 1 to 600 s, positive dimensions,
+  http(s) URLs only, `video/mp4` or `video/webm` for video, and a fallback
+  that is a complete pair.
+- **`SponsorshipEvent.creativeId`** (nullable, `ON DELETE SET NULL`): the
+  creative served with an `OFFER_DISPLAYED` event, for auditing. `NULL` for
+  CARD offers and for every row recorded before the migration. It sits next
+  to `interactionKind`; the two are independent (a display records which
+  interaction it was requested during and, separately, which creative was
+  served).
+
+Migration: `20261005233000_offer_creatives` (additive only: two enums, one
+defaulted column, one nullable column, one table, constraints). The
+branch's own two migrations were not replayed; their content is merged into
+this one on top of the current history.
+
+### `availableSeconds()`: an optional capability, not a wait API
+
+A VIDEO creative must fit the time the developer actually has. On the
+branch that was `WaitHandle.availableSeconds()` and a wire field named
+`availableWaitSeconds`, so video could only ever exist for waits. Here it is
+an **optional member of `QualifyingInteraction`**:
+
+```ts
+interface QualifyingInteraction {
+  readonly kind: QualifyingInteractionKind;
+  isActive(): boolean;
+  availableSeconds?(): number | undefined; // optional capability
+}
+```
+
+A capability belongs to what an interaction can actually know, not to its
+kind:
+
+| Interaction | `availableSeconds()` | Result |
+| --- | --- | --- |
+| VS Code terminal `WAIT` with duration history | present: estimated seconds left in the command | CARD or VIDEO |
+| VS Code terminal `WAIT`, unknown command / video off / compact mode | absent | CARD only |
+| Web beta `DEVELOPER_INITIATED` (a click has no time window) | absent | CARD only |
+| Legacy `WaitHandle` via `offerDuringWait()` | absent (not added to the legacy shape) | CARD only |
+| Any future kind that can estimate a window (`OTHER`, ...) | may be present | CARD or VIDEO |
+
+How it flows:
+
+1. **SDK runtime.** `offerDuring(interaction)` reads
+   `interaction.availableSeconds?.()`. A missing method, `undefined`, a
+   non-finite value or a throwing estimator all mean "no estimate"; a number
+   is floored and clamped to 0 to 3600. Only when there is a number is it
+   sent, as `availableSeconds` on `GET /api/v1/sponsorships/offer`
+   (`OpportunityContext.availableSeconds`). Nothing else about the
+   interaction is sent.
+2. **Server (authoritative).** `SponsoredOfferRequestSchema.availableSeconds`
+   (optional integer 0 to 3600; malformed values are a 400). In
+   `isDeveloperEligibleForSponsorship`, a VIDEO offer is eligible only when
+   `selectCreativeForWindow(creatives, availableSeconds)` finds a creative:
+   the longest one that fits, never a longer one, and nothing under 10 s
+   (`MIN_VIDEO_WINDOW_SECONDS`) or with no value. With the 10/15/20 s cuts:
+   under 10 s or unknown -> no video (a CARD offer may still win), 10 to 14 s
+   -> 10 s, 15 to 19 s -> 15 s, 20 s or more -> 20 s. Ties at equal sponsor
+   charge prefer a (fitting) VIDEO offer, then the offer shown least to this
+   developer today, then load order; a higher charge always wins. The route
+   picks the same creative deterministically, records `creativeId` (plus the
+   reported seconds and the creative length in the display's metadata) and
+   returns `presentationMode` and `creative` in the offer. The client never
+   chooses the presentation mode, the creative or the reward. The interaction
+   kind is not consulted: video depends only on whether a window was
+   reported, so the kind stays descriptive.
+3. **Client re-check (non-authoritative).** Before presenting, the runtime
+   calls `fitsWindow(offer, interaction.availableSeconds?.())`: a VIDEO offer
+   whose creative no longer fits (time passed during the request), or that
+   arrives for an interaction with no available seconds at all, is not
+   presented. CARD offers always fit. This is also why a
+   `DEVELOPER_INITIATED` interaction can never start a video, even against a
+   misbehaving server.
+
+The read-only listing (`GET /api/v1/sponsorships/offers`) ignores the fit
+rule: a listing is not a display, so no interaction or window is involved.
+
+An offer's `ctaUrl` may contain `{displayEventId}`, which the server
+replaces with the display's id (`resolveCtaUrl`) so a landing page can act
+on exactly that display. Offers without the token are returned unchanged.
+
+### VS Code: the terminal wait's estimator
+
+`apps/vscode-extension/src/waitEstimator.ts` is wait-specific by nature and
+stays so: it keys each command by a SHA-256 hash of the normalized command
+line in the extension's local `workspaceState` (at most 200 commands, 5
+samples each, never the text), and estimates the time left as the shortest
+recent run minus the time already elapsed (it errs short). It is not a
+separate code path: `terminalWait(tracker, availableSeconds)` (in
+`sponsoredOffer.ts`) exposes it as the `WAIT` interaction's
+`availableSeconds()` capability, and only when the panel can actually play
+video (`presentation = "panel"`, `video.enabled`, a known command). Durations
+are learned only under the same conditions.
+
+### Presentation surfaces: the DevAds panel first, the status bar as fallback
+
+The branch opened a webview only for VIDEO offers, next to the status bar
+item. Here the panel is the general DevAds-owned surface for any
+presentation mode, and the status bar is the compact mode and the fallback
+(the original spec's section 13):
+
+- **`devads.sponsorship.presentation`** = `"panel"` (default) or
+  `"statusBar"`. `devads.sponsorship.video.enabled` (default on) only
+  matters in panel mode.
+- **`OfferPresentationController`** (`offerPresentation.ts`, pure, no VS Code
+  API) implements the existing `SponsoredOfferView`, so the SDK lifecycle in
+  `SponsoredOfferController` is untouched whichever surface is used. In panel
+  mode it shows the offer in the panel and hides the status bar item (one
+  surface at a time). It falls back to the status bar when the panel cannot
+  be created (webviews unavailable), when it cannot render the offer, or when
+  the developer closes the panel while the offer is still live (closing is
+  not a skip; only the Skip button reports one). In `statusBar` mode it never
+  creates a panel and behaves exactly like the status bar item alone; the
+  extension also reports no available seconds then, so the request is the
+  CARD-only one it always was.
+- **`WebviewOfferPanel`** (`offerPanel.ts`) opens beside the editor with
+  `preserveFocus`, loads no local resources, and accepts only `open`, `skip`
+  and `mediaError` messages, acting only on the offer it currently renders.
+  When the offer goes away (wait ended, skipped, opened) it closes, unless it
+  is the tab the developer is looking at: then it shows an empty state instead
+  of disappearing under them.
+- **`offerPanelView.ts`** renders every state with one security posture
+  (the branch's video view, generalized): CSP `default-src 'none'`,
+  nonce-only inline style/script, media and images only from the creative's
+  own origins (a CARD page allows no media at all), every server string
+  escaped, the CTA URL never in the page. CARD = attribution label, headline,
+  body, reward line, Open/Skip. VIDEO = the same plus a muted, autoplaying
+  player (WebM first, MP4 fallback, poster), a "Loading video..." state until
+  the first frame, and an inline error state that keeps the offer usable if
+  no source plays. A VIDEO offer whose creative is not playable (non-https
+  media, for example) renders as CARD rather than failing.
+- **Labels.** Every surface uses the same attribution: "DevAds Beta ·
+  First-party" plus "Created and funded by DevAds. Not an external sponsor."
+  for `campaignMode = BETA`, "Sponsored" for everything else. The status bar
+  item, its tooltip and its detail notification now apply this too (they
+  previously said "Sponsored" for DevAds' own beta offer); output for LIVE
+  sponsor offers is unchanged.
+
+### Not done here
+
+- **Sponsor self-service video upload.** Creatives are added by the seed or
+  an operator; the sponsor dashboard cannot attach `OfferCreative` rows yet,
+  and sponsor-created offers are always CARD.
+- **No other client reports available seconds.** Only the VS Code terminal
+  wait does. Agent adapters could add it to their own interactions without
+  any runtime or server change.
+- **No read path exposes `creativeId`** (admin activity DTOs, sponsor stats),
+  same as `interactionKind`.
+- **The 25 s README demo** (`docs/demo/`, `tools/beta-creatives/render-demo.mjs`)
+  was not ported as a README change; its render tool is in
+  `tools/beta-creatives/` but the rendered demo files are not.

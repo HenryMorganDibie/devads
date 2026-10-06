@@ -74,6 +74,46 @@ export type RewardSourceDTO = z.infer<typeof RewardSourceSchema>;
 /** Seconds a developer must engage with an opened offer before completing (0 to 1 hour). */
 export const MinEngagementSecondsSchema = z.number().int().min(0).max(3600);
 
+// ---------------------------------------------------------------------------
+// Presentation and creatives
+//
+// An offer's presentation mode tells clients how to present it. CARD is the
+// original text card. VIDEO offers carry one creative per length; the server
+// picks the longest one that fits the seconds the client's qualifying
+// interaction reports as available, and serves no video at all when that is
+// shorter than MIN_VIDEO_WINDOW_SECONDS or not reported. Reporting available
+// seconds is optional per interaction: a terminal WAIT can estimate how long
+// it will last, a DEVELOPER_INITIATED request has no such window. New
+// creative kinds extend CreativeKindSchema without changing the offer shape.
+// ---------------------------------------------------------------------------
+
+export const PresentationModeSchema = z.enum(["CARD", "VIDEO"]);
+export type PresentationMode = z.infer<typeof PresentationModeSchema>;
+
+export const CreativeKindSchema = z.enum(["VIDEO"]);
+export type CreativeKind = z.infer<typeof CreativeKindSchema>;
+
+/** Below this many available seconds, no video creative is served. */
+export const MIN_VIDEO_WINDOW_SECONDS = 10;
+
+/** Whole seconds a qualifying interaction reports as available for presentation (0 to 1 hour). */
+export const AvailableSecondsSchema = z.coerce.number().int().min(0).max(3600);
+
+export const OfferCreativeSchema = z.object({
+  id: z.string(),
+  kind: CreativeKindSchema,
+  /** Preferred source. */
+  url: z.string().url(),
+  mimeType: z.string(),
+  /** Optional second source for players that cannot use the first; list it after `url`. */
+  fallback: z.object({ url: z.string().url(), mimeType: z.string() }).nullable().optional(),
+  posterUrl: z.string().url().nullable(),
+  durationSeconds: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+export type OfferCreative = z.infer<typeof OfferCreativeSchema>;
+
 export const SponsorshipEventTypeSchema = z.enum([
   "OFFER_REQUESTED",
   "OFFER_DISPLAYED",
@@ -127,9 +167,42 @@ export type DevelopmentSessionDTO = z.infer<typeof DevelopmentSessionDTOSchema>;
 // Offer selection + events
 // ---------------------------------------------------------------------------
 
+/**
+ * What gave the client an opportunity to present an offer within a
+ * development session (mirrors the Prisma QualifyingInteractionKind enum).
+ * The model is: development session -> qualifying interaction (sponsorship
+ * opportunity) -> presentation surface -> verified engagement -> reward.
+ *
+ *  - WAIT: the developer is waiting on something the client observes (a
+ *    terminal command, an agent turn). The only kind with client behavior
+ *    today.
+ *  - DEVELOPER_INITIATED: the developer explicitly asked to see an
+ *    opportunity; not gated on a wait.
+ *  - OTHER: extensible catch-all for future kinds (none implemented).
+ *
+ * The kind is descriptive only: it changes no eligibility, selection, cap or
+ * reward rule, and carries no developer content.
+ */
+export const QualifyingInteractionKindSchema = z.enum(["WAIT", "DEVELOPER_INITIATED", "OTHER"]);
+export type QualifyingInteractionKindDTO = z.infer<typeof QualifyingInteractionKindSchema>;
+
+/** Applied when a client sends no kind: every client in production before kinds existed requested offers during waits. */
+export const DEFAULT_QUALIFYING_INTERACTION_KIND: QualifyingInteractionKindDTO = "WAIT";
+
 export const SponsoredOfferRequestSchema = z.object({
   clientType: DevClientTypeSchema.optional(),
   sessionId: z.string().min(1).optional(),
+  /** Optional on the wire for backward compatibility; omitted means WAIT. */
+  interactionKind: QualifyingInteractionKindSchema.default(DEFAULT_QUALIFYING_INTERACTION_KIND),
+  /**
+   * The qualifying interaction's own estimate of how many more seconds it
+   * offers for presentation (for a WAIT: how much longer the wait will
+   * last). Only coarse timing: no command, file or content. Required for a
+   * VIDEO offer to be served; omitted = only CARD offers are eligible.
+   * Independent of interactionKind: the server never infers one from the
+   * other.
+   */
+  availableSeconds: AvailableSecondsSchema.optional(),
 });
 export type SponsoredOfferRequest = z.infer<typeof SponsoredOfferRequestSchema>;
 
@@ -149,8 +222,12 @@ export const SponsoredOfferCandidateSchema = z.object({
   campaignMode: CampaignModeSchema.optional(),
   /** When present, a completion only qualifies this many seconds after OFFER_OPENED. */
   minEngagementSeconds: MinEngagementSecondsSchema.nullable().optional(),
+  /** Absent from older servers; treat as CARD. */
+  presentationMode: PresentationModeSchema.optional(),
+  /** The creative chosen for this display (VIDEO offers); never longer than the reported available seconds. */
+  creative: OfferCreativeSchema.nullable().optional(),
 });
-export type SponsoredOfferCandidate = z.infer<typeof SponsoredOfferCandidateSchema>;
+export type SponsoredOfferCandidate= z.infer<typeof SponsoredOfferCandidateSchema>;
 
 export const SponsoredOfferResponseSchema = z.object({
   offer: SponsoredOfferCandidateSchema.nullable(),
@@ -186,6 +263,11 @@ export const SponsoredOfferListResponseSchema = z.object({
 });
 export type SponsoredOfferListResponse = z.infer<typeof SponsoredOfferListResponseSchema>;
 
+// No interactionKind here on purpose: an interaction event (skip, open,
+// interact, complete) always belongs to the display it references, so the
+// server copies the kind from that server-recorded OFFER_DISPLAYED row. A
+// client-sent value is stripped like any other unknown key and can never
+// relabel a display.
 export const SponsorshipEventRequestSchema = z.object({
   eventId: z.string().min(1).max(128),
   type: ClientSponsorshipEventTypeSchema,

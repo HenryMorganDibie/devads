@@ -1,5 +1,5 @@
 import type { DevAdsClient } from "../client.js";
-import type { SponsoredOpportunity } from "../types.js";
+import type { QualifyingInteractionKind, SponsoredOpportunity } from "../types.js";
 
 /**
  * The slice of DevAdsClient the adapter runtime drives. Declared as a Pick so
@@ -19,12 +19,47 @@ export type ProtocolClient = Pick<
 export type ProtocolClientProvider = () => ProtocolClient | null;
 
 /**
- * A natural wait the host can already observe without inspecting anything
- * it does not own: a terminal command still running, an agent turn still in
- * progress, a build the tool itself started. The runtime only asks whether
- * it is still active, never what it is.
+ * One qualifying interaction within a development session: a moment the
+ * host can already observe, without inspecting anything it does not own,
+ * that gives it an opportunity to present a sponsored offer. A wait (a
+ * terminal command still running, an agent turn in progress) is one kind;
+ * the developer explicitly asking for an opportunity is another.
+ *
+ * The runtime asks only which kind it is (forwarded to the server, which
+ * records it on the display) and whether it is still active (an offer is
+ * presented only while it is). It never asks what the interaction is about.
+ *
+ * Capabilities are members of this interface, added as optional members so
+ * existing hosts keep compiling. A capability belongs to what an
+ * interaction can actually know, not to its kind: availableSeconds() exists
+ * because some interactions (a terminal wait with a duration history) can
+ * estimate how long they will last, and others (a developer clicking "show
+ * me an opportunity") cannot.
+ */
+export interface QualifyingInteraction {
+  /** Which kind of qualifying interaction this is. */
+  readonly kind: QualifyingInteractionKind;
+  /** True while an offer may still be presented for this interaction. */
+  isActive(): boolean;
+  /**
+   * Optional: the host's estimate of whole seconds this interaction still
+   * offers for presentation, or undefined when it has no estimate right now.
+   * Omit it entirely for interactions with no time window. Only this number
+   * is sent; the server serves a VIDEO offer only when one of its creatives
+   * fits it, and the runtime re-checks the fit before presenting. Without it
+   * the interaction is offered CARD presentation only.
+   */
+  availableSeconds?(): number | undefined;
+}
+
+/**
+ * The pre-interaction-kind shape: a natural wait, identified only by
+ * whether it is still active. Kept so hosts written against the Phase 6
+ * runtime keep compiling; a WaitHandle is treated as a QualifyingInteraction
+ * of kind WAIT. New hosts should pass a QualifyingInteraction.
  */
 export interface WaitHandle {
+  readonly kind?: "WAIT";
   isActive(): boolean;
 }
 

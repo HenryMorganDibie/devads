@@ -8,6 +8,11 @@ export const SKIP_OFFER_COMMAND = "devads.sponsorship.skipOffer";
 
 const MAX_TITLE_CHARS = 40;
 
+/** DevAds' own beta campaigns are never labelled as sponsored by someone else. */
+export function offerLabel(offer: Pick<SponsoredOpportunity, "campaignMode">): string {
+  return offer.campaignMode === "BETA" ? "DevAds Beta" : "Sponsored";
+}
+
 /** Status bar text must not let sponsor-provided text inject $(icon) codicons. */
 function plain(text: string, max: number): string {
   const cleaned = text.replace(/\$\(/g, "(").replace(/\s+/g, " ").trim();
@@ -17,8 +22,13 @@ function plain(text: string, max: number): string {
 /**
  * Status bar surface for a sponsored OFFER (the sponsorship domain). This is
  * deliberately a separate item from StatusBarAd (standard ads), with its own
- * commands, so the two ad types are never conflated. Always labelled
- * "Sponsored" and always shows the reward on offer.
+ * commands, so the two ad types are never conflated. Labelled "Sponsored"
+ * (or "DevAds Beta" for DevAds' own first-party campaigns, which are never
+ * presented as an external sponsor) and always shows the reward on offer.
+ *
+ * It is the compact presentation (devads.sponsorship.presentation =
+ * "statusBar") and the fallback whenever the DevAds offer panel is
+ * unavailable (see OfferPresentationController).
  *
  * Sponsor-provided text is rendered with appendText (escaped), and the
  * tooltip only trusts this surface's own open/skip commands.
@@ -33,7 +43,7 @@ export class StatusBarSponsoredOffer implements SponsoredOfferView, vscode.Dispo
   }
 
   show(offer: SponsoredOpportunity): void {
-    this.item.text = `$(gift) Sponsored: ${plain(offer.title, MAX_TITLE_CHARS)} · ${formatReward(
+    this.item.text = `$(gift) ${offerLabel(offer)}: ${plain(offer.title, MAX_TITLE_CHARS)} · ${formatReward(
       offer.rewardType,
       offer.rewardAmountUnits
     )}`;
@@ -44,7 +54,7 @@ export class StatusBarSponsoredOffer implements SponsoredOfferView, vscode.Dispo
   private buildTooltip(offer: SponsoredOpportunity): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
     md.isTrusted = { enabledCommands: [OPEN_OFFER_COMMAND, SKIP_OFFER_COMMAND] };
-    md.appendMarkdown(`**SPONSORED OFFER**\n\n`);
+    md.appendMarkdown(offer.campaignMode === "BETA" ? `**DEVADS BETA OPPORTUNITY · FIRST-PARTY**\n\n` : `**SPONSORED OFFER**\n\n`);
     md.appendMarkdown(`**`);
     md.appendText(offer.title);
     md.appendMarkdown(`**\n\n`);
@@ -57,7 +67,7 @@ export class StatusBarSponsoredOffer implements SponsoredOfferView, vscode.Dispo
       md.appendMarkdown(`\n\n`);
     }
     md.appendMarkdown(`[View offer](command:${OPEN_OFFER_COMMAND}) &nbsp;&nbsp; [Skip](command:${SKIP_OFFER_COMMAND})\n\n`);
-    md.appendMarkdown(`*Sponsored*`);
+    md.appendMarkdown(offer.campaignMode === "BETA" ? `*Created and funded by DevAds. Not an external sponsor.*` : `*Sponsored*`);
     return md;
   }
 

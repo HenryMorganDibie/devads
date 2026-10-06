@@ -10,7 +10,9 @@ import {
   isStaleSessionError,
   type AdapterHost,
   type ProtocolClient,
+  type QualifyingInteraction,
   type SponsoredOpportunity,
+  type WaitHandle,
 } from "../index.js";
 
 function offer(overrides: Partial<SponsoredOpportunity> = {}): SponsoredOpportunity {
@@ -72,7 +74,7 @@ describe("SponsoredOfferRuntime", () => {
     const { client, host, runtime } = setup();
     await runtime.offerDuringWait(activeWait());
     expect(client.startSession).toHaveBeenCalledTimes(1);
-    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1" });
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1", interactionKind: "WAIT" });
     expect(host.presentOffer).toHaveBeenCalledWith(offer());
     expect(runtime.getCurrent()?.displayEventId).toBe("disp_1");
   });
@@ -95,7 +97,7 @@ describe("SponsoredOfferRuntime", () => {
     const client = mockClient({ startSession: vi.fn().mockRejectedValue(new DevAdsError("network", "down")) });
     const { runtime } = setup({ client });
     await runtime.offerDuringWait(activeWait());
-    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({});
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ interactionKind: "WAIT" });
   });
 
   it("invalidates the cached session on a stale-session rejection", async () => {
@@ -251,6 +253,75 @@ describe("DevelopmentSessionManager", () => {
     const session = new DevelopmentSessionManager(() => client, log);
     await expect(session.start()).resolves.toBeNull();
     expect(log).toHaveBeenCalledWith("sponsorship session start failed: unauthenticated");
+  });
+});
+
+describe("SponsoredOfferRuntime with qualifying interactions", () => {
+  const waitInteraction = (active: () => boolean = () => true): QualifyingInteraction => ({ kind: "WAIT", isActive: active });
+
+  /** Drives one full lifecycle and returns every client and host call in order. */
+  async function trace(start: (runtime: SponsoredOfferRuntime, active: { value: boolean }) => Promise<void>) {
+    const { client, host, runtime } = setup();
+    const active = { value: true };
+    await start(runtime, active);
+    await runtime.interact();
+    await runtime.open();
+    active.value = false;
+    runtime.interactionEnded();
+    const calls = (mock: Record<string, ReturnType<typeof vi.fn>>) =>
+      Object.fromEntries(Object.entries(mock).map(([name, fn]) => [name, fn.mock.calls]));
+    return { client: calls(client as unknown as Record<string, ReturnType<typeof vi.fn>>), host: calls(host) };
+  }
+
+  it("a WAIT QualifyingInteraction behaves exactly like the legacy WaitHandle", async () => {
+    const viaInteraction = await trace((runtime, active) => runtime.offerDuring(waitInteraction(() => active.value)));
+    const viaLegacyWait = await trace((runtime, active) => runtime.offerDuringWait({ isActive: () => active.value }));
+    expect(viaInteraction).toEqual(viaLegacyWait);
+    expect(viaInteraction.client.requestSponsoredOpportunity).toEqual([[{ sessionId: "sess_1", interactionKind: "WAIT" }]]);
+    expect(viaInteraction.client.completeQualifyingAction).toHaveLength(1);
+  });
+
+  it("a legacy WaitHandle that already says WAIT is accepted unchanged", async () => {
+    const { client, runtime } = setup();
+    const legacy: WaitHandle = { kind: "WAIT", isActive: () => true };
+    await runtime.offerDuringWait(legacy);
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({ sessionId: "sess_1", interactionKind: "WAIT" });
+  });
+
+  it("forwards a non-wait kind to the server without changing the lifecycle", async () => {
+    const { client, host, runtime } = setup();
+    await runtime.offerDuring({ kind: "DEVELOPER_INITIATED", isActive: () => true });
+    expect(client.requestSponsoredOpportunity).toHaveBeenCalledWith({
+      sessionId: "sess_1",
+      interactionKind: "DEVELOPER_INITIATED",
+    });
+    expect(host.presentOffer).toHaveBeenCalledWith(offer());
+  });
+
+  it("does not present after the interaction ended, and interactionEnded dismisses without a skip", async () => {
+    const ended = setup();
+    await ended.runtime.offerDuring(waitInteraction(() => false));
+    expect(ended.host.presentOffer).not.toHaveBeenCalled();
+
+    const { client, host, runtime } = setup();
+    await runtime.offerDuring(waitInteraction());
+    runtime.interactionEnded();
+    expect(host.dismissOffer).toHaveBeenCalled();
+    expect(runtime.getCurrent()).toBeNull();
+    expect(client.reportOfferEvent).not.toHaveBeenCalled();
+  });
+
+  it("asks the interaction only for its kind, whether it is active, and its optional available seconds", async () => {
+    const { runtime } = setup();
+    const seen = new Set<string | symbol>();
+    const interaction = new Proxy(waitInteraction(), {
+      get(target, prop, receiver) {
+        seen.add(prop);
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    await runtime.offerDuring(interaction);
+    expect([...seen].sort()).toEqual(["availableSeconds", "isActive", "kind"]);
   });
 });
 

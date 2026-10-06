@@ -465,13 +465,32 @@ paths:
         Server-authoritative selection over approved sponsorship campaigns,
         honouring the developer's opt-in, client eligibility, frequency caps,
         per-developer reward caps and budgets. The client never chooses the
-        offer or the reward.
+        offer or the reward. A VIDEO offer is only eligible when one of its
+        creatives fits availableSeconds; the longest fitting creative is
+        returned in `creative` (never a longer one), and without
+        availableSeconds no video is served. An offer's ctaUrl
+        `{displayEventId}` token is replaced with this display's id. See
+        sponsorship-architecture.md and beta-video-ads.md.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: sessionId, in: query, required: false, schema: { type: string } }
         - { name: clientType, in: query, required: false, schema: { $ref: "#/components/schemas/DevClientType" } }
+        - name: interactionKind
+          in: query
+          required: false
+          description: The qualifying interaction the client is presenting during (descriptive only; default WAIT)
+          schema: { type: string, enum: [WAIT, DEVELOPER_INITIATED, OTHER], default: WAIT }
+        - name: availableSeconds
+          in: query
+          required: false
+          description: >
+            The qualifying interaction's own estimate of whole seconds it offers
+            for presentation (for a wait, how much longer it will last). Timing
+            only, no command or content. Sent only by interactions that can
+            estimate it; required for a VIDEO offer.
+          schema: { type: integer, minimum: 0, maximum: 3600 }
       responses:
-        "200": { description: "{ offer: SponsoredOfferCandidate | null }" }
+        "200": { description: "{ offer: SponsoredOfferCandidate | null }, including presentationMode (CARD | VIDEO) and creative (id, kind, url, mimeType, fallback, posterUrl, durationSeconds, width, height) or null" }
         "400": { description: invalid_request or client_type_required (neither sessionId nor clientType) }
         "403": { description: forbidden (session belongs to someone else) }
         "404": { description: developer_not_found }

@@ -516,6 +516,20 @@ enum SponsorshipEventType {
   OFFER_COMPLETED
 }
 
+/// What gave the client an opportunity to present a sponsored offer within a
+/// development session. Recorded per offer display, not per session: one
+/// session can contain many interactions of different kinds.
+enum QualifyingInteractionKind {
+  // The developer is waiting on something the client can observe (a
+  // terminal command, an agent turn). The only kind with real client
+  // behavior today, and the server default when a client sends none.
+  WAIT
+  // The developer explicitly asked to see an opportunity; not gated on a wait.
+  DEVELOPER_INITIATED
+  // Extensible catch-all for future kinds (build complete, tool discovery, ...).
+  OTHER
+}
+
 enum RewardStatus {
   PENDING
   APPROVED
@@ -540,7 +554,10 @@ model DevelopmentSession {
   clientType       DevClientType
   clientVersion    String?
   status           DevSessionStatus @default(ACTIVE)
-  activityCategory String? // coarse label only (e.g. "build", "test"), validated server-side
+  // Coarse session-wide label only (e.g. "build", "test"), validated
+  // server-side. Which interaction triggered a given offer is recorded per
+  // event in SponsorshipEvent.interactionKind, not here.
+  activityCategory String?
   startedAt        DateTime         @default(now())
   endedAt          DateTime?
 
@@ -611,10 +628,15 @@ model SponsoredOffer {
   requiredAction String? // human-readable description of the qualifying action
   expiresAt      DateTime?
   status         SponsoredOfferStatus @default(ACTIVE)
+  /// How clients present the offer. VIDEO offers carry OfferCreative rows
+  /// and are only served when one fits the seconds the client's qualifying
+  /// interaction reports as available for presentation.
+  presentationMode PresentationMode   @default(CARD)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
-  events SponsorshipEvent[]
+  events    SponsorshipEvent[]
+  creatives OfferCreative[]
 
   @@index([campaignId])
   @@map("sponsored_offers")
@@ -636,9 +658,17 @@ model SponsorshipEvent {
   developer   DeveloperProfile     @relation(fields: [developerId], references: [id], onDelete: Cascade)
   sessionId   String?
   session     DevelopmentSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  /// The creative served with an OFFER_DISPLAYED event (audit only; null for CARD offers).
+  creativeId  String?
+  creative    OfferCreative?       @relation(fields: [creativeId], references: [id], onDelete: SetNull)
   // For client-reported events: the server-issued OFFER_DISPLAYED eventId
   // this interaction refers to.
   displayEventId String?
+  // The qualifying interaction the offer was requested during. Set by the
+  // server on OFFER_DISPLAYED (client value, defaulting to WAIT) and copied
+  // from that display onto every event that refers to it. Null only on
+  // rows recorded before interaction kinds existed.
+  interactionKind QualifyingInteractionKind?
   metadata    Json?
   createdAt   DateTime             @default(now())
 
@@ -755,6 +785,46 @@ model RewardRedemption {
 enum CampaignMode {
   LIVE
   BETA
+}
+
+/// How a sponsored offer is presented. CARD is the original text card;
+/// VIDEO carries one OfferCreative per length.
+enum PresentationMode {
+  CARD
+  VIDEO
+}
+
+enum CreativeKind {
+  VIDEO
+}
+
+/// A creative asset for a sponsored offer. For VIDEO offers there is one row
+/// per available length; the server serves the longest one that fits the
+/// seconds the client's qualifying interaction reports as available (never
+/// a longer one). Interactions that report no available time get no video.
+model OfferCreative {
+  id              String         @id @default(cuid())
+  offerId         String
+  offer           SponsoredOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  kind            CreativeKind
+  /// Preferred source (for video: WebM/VP9, which every Chromium-based host can decode).
+  url             String
+  mimeType        String
+  /// Optional second source for players that cannot use the first (for video: H.264 MP4).
+  fallbackUrl      String?
+  fallbackMimeType String?
+  posterUrl       String?
+  durationSeconds Int
+  width           Int
+  height          Int
+  /// Content hash of the asset, so a served creative can be audited.
+  sha256          String?
+  createdAt       DateTime       @default(now())
+
+  events SponsorshipEvent[]
+
+  @@unique([offerId, durationSeconds])
+  @@map("offer_creatives")
 }
 
 enum RewardSource {

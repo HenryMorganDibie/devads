@@ -122,17 +122,30 @@ export class DevAdsClient {
    * Resolves to null when none is (opted out, no eligible campaign, caps,
    * budget, ...). A non-null result has already been recorded server-side
    * as OFFER_DISPLAYED; report later interactions against its displayEventId.
+   *
+   * `interactionKind` says what gave the client this opportunity (a wait, a
+   * developer request, ...). It is sent only when given; the server records
+   * an omitted kind as WAIT. `availableSeconds` is sent only when given;
+   * without it the server serves no VIDEO offer.
    */
   async requestSponsoredOpportunity(context: OpportunityContext = {}): Promise<SponsoredOpportunity | null> {
     const query = validateRequest(SponsoredOfferRequestSchema, {
       clientType: context.clientType ?? this.defaults.clientType,
       sessionId: context.sessionId,
+      interactionKind: context.interactionKind,
+      availableSeconds: context.availableSeconds,
     });
     if (!query.clientType && !query.sessionId) {
       throw new DevAdsError("invalid_request", "clientType or sessionId is required");
     }
     const res = await this.call(ROUTES.requestOffer.method, ROUTES.requestOffer.path(), SponsoredOfferResponseSchema, {
-      query: { clientType: query.clientType, sessionId: query.sessionId },
+      query: {
+        clientType: query.clientType,
+        sessionId: query.sessionId,
+        // The schema fills in the default; only send a kind the caller chose.
+        interactionKind: context.interactionKind === undefined ? undefined : query.interactionKind,
+        availableSeconds: query.availableSeconds === undefined ? undefined : String(query.availableSeconds),
+      },
     });
     return res.offer;
   }

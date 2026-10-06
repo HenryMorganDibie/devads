@@ -105,6 +105,16 @@ npm run seed:beta -w @devads/database
 The walkthrough URL uses the first non-empty of `BETA_SITE_URL` or
 `NEXT_PUBLIC_SITE_URL`, falling back to `https://devads-app.vercel.app`.
 
+### First-party video campaigns
+
+Alongside the walkthrough, the seed creates four DevAds-owned VIDEO
+campaigns (Schema-Watch, web-harvester, The Scribe, DevAds) with real 10,
+15 and 20 second creatives, served in the VS Code extension's DevAds panel
+only when a cut fits the time the current terminal wait is expected to
+last. The reward still requires the DevAds-controlled qualifying action on
+the product page (`/beta/opportunity/<product>`), never the video itself.
+See [beta-video-ads.md](./beta-video-ads.md).
+
 ### Verification and the ledger
 
 The web app is a first-party protocol client (`WEB`) and uses

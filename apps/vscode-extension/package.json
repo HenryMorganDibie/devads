@@ -77,10 +77,25 @@
           "default": true,
           "description": "Send coarse, allowlisted context (language, framework, runtime, platform, country) with ad requests. Never sends source code, file contents, environment variables, secrets, or full command arguments."
         },
+        "devads.sponsorship.presentation": {
+          "type": "string",
+          "enum": ["panel", "statusBar"],
+          "enumDescriptions": [
+            "Show offers in the DevAds panel beside the editor (opens without taking focus). Text offers render as a card; video offers play there. Falls back to the status bar if the panel cannot open.",
+            "Compact: show offers in the status bar only, text offers only."
+          ],
+          "default": "panel",
+          "description": "Where sponsored offers are presented."
+        },
+        "devads.sponsorship.video.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow video offers in the DevAds panel. A video is only shown when it fits the time a terminal command is expected to keep running, estimated from how long the same command took before on this machine (command history is kept locally as hashes). Only that number of seconds is sent, never the command. Videos open beside the editor without taking focus, start muted, and close when the command finishes. Turn off to receive text offers only. Has no effect when devads.sponsorship.presentation is statusBar."
+        },
         "devads.sponsorship.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show sponsored offers that carry a developer reward (for example AI or API credits) during long-running terminal commands, and keep a DevAds development session open while signed in. Offers only appear when devads.enabled is also on, and your DevAds account opt-in is still enforced by the server. Sends only this extension's client type and version plus session and offer ids. Never sends source code, prompts, file paths, or command lines."
+          "description": "Show sponsored offers that carry a developer reward (for example AI or API credits) during long-running terminal commands, and keep a DevAds development session open while signed in. Offers only appear when devads.enabled is also on, and your DevAds account opt-in is still enforced by the server. Sends only this extension's client type and version plus session and offer ids, the interaction kind (WAIT) and, when video offers are allowed, the estimated whole seconds left in the wait. Never sends source code, prompts, file paths, or command lines."
         }
       }
     }
