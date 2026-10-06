@@ -31,4 +31,6 @@ export const LINKS = {
   privacy: env(process.env.NEXT_PUBLIC_PRIVACY_URL),
   terms: env(process.env.NEXT_PUBLIC_TERMS_URL),
   contact: env(process.env.NEXT_PUBLIC_CONTACT_URL),
+  /** The extension's VS Code Marketplace listing. Unset until it is published: the dashboard offers the .vsix instead. */
+  vscodeMarketplace: env(process.env.NEXT_PUBLIC_VSCODE_MARKETPLACE_URL),
 } as const;

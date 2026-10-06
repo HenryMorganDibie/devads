@@ -6,6 +6,7 @@
   "homepage": "https://devads-app.vercel.app",
   "publisher": "devads",
   "license": "MIT",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/HenryMorganDibie/devads"

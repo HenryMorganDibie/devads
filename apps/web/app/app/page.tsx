@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SponsoredOpportunity } from "@devads/ad-sdk";
 import { useDeveloper } from "../../components/AppShell";
+import { LINKS } from "../../lib/site";
 import {
   fetchHistory,
   fetchSessions,
@@ -232,13 +233,26 @@ export default function DashboardPage() {
           <div className="text-sm">
             <p className="mb-2">Not connected. To use DevAds inside VS Code with this same account:</p>
             <ol className="list-decimal pl-5 space-y-1 text-muted">
-              <li>
-                <a href="/downloads/devads-0.1.0.vsix" className="text-accent" download>
-                  Download the DevAds extension (.vsix)
-                </a>
-                , then in VS Code open the Extensions view, click the &ldquo;...&rdquo; menu, and choose &ldquo;Install from
-                VSIX...&rdquo;. DevAds is not yet listed on the VS Code Marketplace, so this manual install is required for now.
-              </li>
+              {LINKS.vscodeMarketplace ? (
+                <li>
+                  <a href={LINKS.vscodeMarketplace} className="text-accent" target="_blank" rel="noreferrer">
+                    Install DevAds from the VS Code Marketplace
+                  </a>
+                  , or search for &ldquo;DevAds&rdquo; in the Extensions view. You can also{" "}
+                  <a href="/downloads/devads-0.1.0.vsix" className="text-accent" download>
+                    download the .vsix
+                  </a>{" "}
+                  and choose &ldquo;Install from VSIX...&rdquo;.
+                </li>
+              ) : (
+                <li>
+                  <a href="/downloads/devads-0.1.0.vsix" className="text-accent" download>
+                    Download the DevAds extension (.vsix)
+                  </a>
+                  , then in VS Code open the Extensions view, click the &ldquo;...&rdquo; menu, and choose &ldquo;Install from
+                  VSIX...&rdquo;. DevAds is not yet listed on the VS Code Marketplace, so this manual install is required for now.
+                </li>
+              )}
               <li>Run &ldquo;DevAds: Sign In&rdquo; from the command palette.</li>
               <li>
                 Enter the code it shows on the{" "}
