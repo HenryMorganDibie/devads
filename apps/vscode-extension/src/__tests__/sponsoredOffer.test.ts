@@ -42,7 +42,9 @@ function mockClient(overrides: Partial<Record<keyof SponsorshipApi, ReturnType<t
   } as unknown as SponsorshipApi & Record<keyof SponsorshipApi, ReturnType<typeof vi.fn>>;
 }
 
-function setup(opts: { client?: ReturnType<typeof mockClient>; sessionId?: string | null; opened?: boolean } = {}) {
+function setup(
+  opts: { client?: ReturnType<typeof mockClient>; sessionId?: string | null; opened?: boolean; firstPartyOrigin?: string } = {}
+) {
   const client = opts.client ?? mockClient();
   const sessionId = opts.sessionId === undefined ? "sess_1" : opts.sessionId;
   const session = {
@@ -60,6 +62,7 @@ function setup(opts: { client?: ReturnType<typeof mockClient>; sessionId?: strin
     view,
     openExternal,
     notify,
+    getFirstPartyOrigin: () => opts.firstPartyOrigin,
     log,
   });
   return { client, session, view, openExternal, notify, log, controller };
@@ -398,6 +401,43 @@ describe("SponsoredOfferController: skip / interact / open wiring", () => {
     await controller.open();
     expect(client.reportOfferEvent).not.toHaveBeenCalled();
     expect(openExternal).not.toHaveBeenCalled();
+  });
+});
+
+describe("SponsoredOfferController: DevAds' own walkthrough link", () => {
+  const SITE = "https://devads-app.vercel.app";
+  const beta = offer({
+    ctaUrl: `${SITE}/beta/opportunity`,
+    requiredAction: "Open the walkthrough, spend at least 15 seconds on it, then confirm completion",
+    rewardType: "BETA_CREDITS",
+    campaignMode: "BETA",
+    minEngagementSeconds: 15,
+  });
+
+  it("opens a first-party walkthrough with the display, session and engagement ids so it can be completed", async () => {
+    const client = mockClient({ requestSponsoredOpportunity: vi.fn().mockResolvedValue(beta) });
+    const { openExternal, controller } = setup({ client, firstPartyOrigin: SITE });
+    await controller.maybeRequest(tracker(), TICK);
+    await controller.open();
+    expect(openExternal).toHaveBeenCalledWith(`${SITE}/beta/opportunity?d=disp_1&s=sess_1&m=15`);
+    // Same server-issued display; completion is left to the walkthrough (it has a required action).
+    expect(client.reportOfferEvent).toHaveBeenCalledWith({ type: "OFFER_OPENED", displayEventId: "disp_1", sessionId: "sess_1" });
+    expect(client.completeQualifyingAction).not.toHaveBeenCalled();
+  });
+
+  it("never adds DevAds ids to a third-party sponsor link", async () => {
+    const { openExternal, controller } = setup({ firstPartyOrigin: SITE });
+    await controller.maybeRequest(tracker(), TICK);
+    await controller.open();
+    expect(openExternal).toHaveBeenCalledWith("https://acme.example/devads");
+  });
+
+  it("opens the link unchanged when no first-party origin is configured", async () => {
+    const client = mockClient({ requestSponsoredOpportunity: vi.fn().mockResolvedValue(beta) });
+    const { openExternal, controller } = setup({ client });
+    await controller.maybeRequest(tracker(), TICK);
+    await controller.open();
+    expect(openExternal).toHaveBeenCalledWith(`${SITE}/beta/opportunity`);
   });
 });
 

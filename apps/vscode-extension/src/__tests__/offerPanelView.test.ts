@@ -127,11 +127,13 @@ describe("CARD offer presentation in the panel", () => {
     expect(html).not.toContain("<video");
     expect(html).toContain('<script nonce="NONCE">');
     expect(html).toContain('<style nonce="NONCE">');
-    // Only the two action messages can be posted; the CTA URL never reaches the page.
+    // Only the two actions and the engagement signal can be posted; the CTA URL never reaches the page.
     expect(html.match(/postMessage\(\{ type: "(\w+)" \}\)/g)).toEqual([
       'postMessage({ type: "open" })',
       'postMessage({ type: "skip" })',
+      'postMessage({ type: "engaged" })',
     ]);
+    expect(html).toContain('window.addEventListener("focus", engaged)');
     expect(html).not.toContain("acme.example");
   });
 

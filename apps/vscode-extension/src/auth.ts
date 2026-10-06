@@ -45,14 +45,15 @@ export async function signIn(context: vscode.ExtensionContext, adServerUrl: stri
     return false;
   }
 
+  // Not awaited: polling must start immediately. The prompt only resolves when
+  // the toast is clicked or closed, so awaiting it would stall sign-in for a
+  // developer who enters the code without touching the toast.
   const openInBrowser = "Open browser";
-  const choice = await vscode.window.showInformationMessage(
-    `DevAds: enter code ${start.userCode} at ${start.verificationUrl} to sign in.`,
-    openInBrowser
-  );
-  if (choice === openInBrowser) {
-    void vscode.env.openExternal(vscode.Uri.parse(start.verificationUrl));
-  }
+  void vscode.window
+    .showInformationMessage(`DevAds: enter code ${start.userCode} at ${start.verificationUrl} to sign in.`, openInBrowser)
+    .then((choice) => {
+      if (choice === openInBrowser) void vscode.env.openExternal(vscode.Uri.parse(start.verificationUrl));
+    });
 
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "DevAds: waiting for sign-in..." },

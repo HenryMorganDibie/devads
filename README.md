@@ -379,12 +379,15 @@ production; other branches get preview deployments.
 ## VS Code extension
 
 ```bash
-npm run package -w @devads/vscode-extension    # produces devads-0.1.0.vsix
+npm run package -w devads    # produces apps/vscode-extension/devads-0.1.0.vsix
 ```
 
 Install via **Extensions → ... → Install from VSIX**, or press F5 in
 `apps/vscode-extension` (with that folder open) for an Extension
-Development Host. Run **DevAds: Sign In**, then trigger a card with:
+Development Host. The extension talks to the production API
+(`https://devads-api.vercel.app`) by default; against a local stack set
+`devads.adServerUrl` to `http://localhost:4000` and `devads.webAppUrl` to
+`http://localhost:3000`. Run **DevAds: Sign In**, then trigger a card with:
 
 ```bash
 node scripts/demo-wait.js 30

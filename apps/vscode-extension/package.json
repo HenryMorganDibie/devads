@@ -8,7 +8,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/devads/devads"
+    "url": "https://github.com/HenryMorganDibie/devads"
   },
   "engines": {
     "vscode": "^1.93.0"
@@ -64,13 +64,13 @@
         },
         "devads.adServerUrl": {
           "type": "string",
-          "default": "http://localhost:4000",
-          "description": "DevAds ad server URL."
+          "default": "https://devads-api.vercel.app",
+          "description": "DevAds ad server URL. Set to http://localhost:4000 for local development."
         },
         "devads.webAppUrl": {
           "type": "string",
-          "default": "http://localhost:3000",
-          "description": "DevAds web dashboard URL, used for sign-in and device pairing."
+          "default": "https://devads-app.vercel.app",
+          "description": "DevAds web dashboard URL, used for the dashboard link and DevAds' own offer walkthroughs. Set to http://localhost:3000 for local development."
         },
         "devads.telemetryEnabled": {
           "type": "boolean",

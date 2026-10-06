@@ -1,4 +1,4 @@
-import { DevAdsError, type DevAdsClient, type SponsoredOpportunity } from "@devads/ad-sdk";
+import { DevAdsError, firstPartyOfferUrl, type DevAdsClient, type SponsoredOpportunity } from "@devads/ad-sdk";
 import { forgetWebSession, webSessionId } from "./beta";
 
 /**
@@ -12,11 +12,8 @@ export function opportunityHref(
   sessionId: string,
   origin: string
 ): { href: string; internal: boolean } {
-  const url = new URL(offer.ctaUrl);
-  if (url.origin !== origin) return { href: offer.ctaUrl, internal: false };
-  url.searchParams.set("d", offer.displayEventId);
-  url.searchParams.set("s", sessionId);
-  if (offer.minEngagementSeconds) url.searchParams.set("m", String(offer.minEngagementSeconds));
+  const url = firstPartyOfferUrl(offer, origin, sessionId);
+  if (!url) return { href: offer.ctaUrl, internal: false };
   return { href: `${url.pathname}${url.search}`, internal: true };
 }
 

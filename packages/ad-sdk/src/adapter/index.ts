@@ -10,6 +10,7 @@
 export { DevelopmentSessionManager } from "./session.js";
 export { fitsWindow, SponsoredOfferRuntime, type SponsoredOfferRuntimeDeps } from "./offerRuntime.js";
 export { canClaimCompletionOnOpen, formatReward, rewardLabel } from "./rewards.js";
+export { firstPartyOfferUrl } from "./links.js";
 export { describeError, isRetryableCompletionError, isStaleSessionError } from "./errors.js";
 export {
   CLIENT_INTEGRATIONS,

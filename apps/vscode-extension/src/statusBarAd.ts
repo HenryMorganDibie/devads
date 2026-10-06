@@ -1,6 +1,15 @@
 import * as vscode from "vscode";
 import type { AdCandidate } from "./adClient";
 
+const AD_COMMANDS = ["devads.adClicked", "devads.adDismissed"];
+const MAX_HEADLINE_CHARS = 60;
+
+/** Status bar text must not let sponsor-provided text inject $(icon) codicons. */
+function plain(text: string, max: number): string {
+  const cleaned = text.replace(/\$\(/g, "(").replace(/\s+/g, " ").trim();
+  return cleaned.length > max ? cleaned.slice(0, max - 1) + "…" : cleaned;
+}
+
 /**
  * Renders the current ad as a compact StatusBarItem -- per VS Code's own
  * UX guidance against using a webview for promotional content. Clicking
@@ -20,18 +29,25 @@ export class StatusBarAd implements vscode.Disposable {
   show(ad: AdCandidate): void {
     this.current = ad;
     this.shownAt = Date.now();
-    this.item.text = `$(megaphone) ${ad.headline}`;
+    this.item.text = `$(megaphone) ${plain(ad.headline, MAX_HEADLINE_CHARS)}`;
     this.item.tooltip = this.buildTooltip(ad);
     this.item.show();
   }
 
   private buildTooltip(ad: AdCandidate): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
-    md.isTrusted = true;
+    // Sponsor-provided text is escaped (appendText), and the tooltip trusts
+    // only this surface's own two commands, so a creative can never embed a
+    // link that runs any other command.
+    md.isTrusted = { enabledCommands: AD_COMMANDS };
     md.appendMarkdown(`**SPONSORED**\n\n`);
-    md.appendMarkdown(`${ad.headline}\n\n`);
-    if (ad.body) md.appendMarkdown(`${ad.body}\n\n`);
-    md.appendMarkdown(`[${ad.ctaLabel}](command:devads.adClicked) &nbsp;&nbsp; [Dismiss](command:devads.adDismissed)\n\n`);
+    md.appendText(ad.headline);
+    md.appendMarkdown(`\n\n`);
+    if (ad.body) {
+      md.appendText(ad.body);
+      md.appendMarkdown(`\n\n`);
+    }
+    md.appendMarkdown(`[${escapeLinkText(ad.ctaLabel)}](command:devads.adClicked) &nbsp;&nbsp; [Dismiss](command:devads.adDismissed)\n\n`);
     md.appendMarkdown(`*Sponsored*`);
     return md;
   }
@@ -54,4 +70,9 @@ export class StatusBarAd implements vscode.Disposable {
   dispose(): void {
     this.item.dispose();
   }
+}
+
+/** Escapes Markdown link-text metacharacters so a label cannot close the link or start a new one. */
+export function escapeLinkText(text: string): string {
+  return plain(text, 40).replace(/[\\`*_{}\[\]()#+\-.!<>|~]/g, (c) => `\\${c}`);
 }
