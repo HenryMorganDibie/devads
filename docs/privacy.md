@@ -30,11 +30,26 @@ extension sends less than the above:
 | Client type | `VS_CODE` | fixed value identifying the tool |
 | Extension version | `0.1.0` | from the extension's own manifest |
 | Session id, offer display id, event id | opaque ids | server-issued, or random per event |
+| Interaction kind | `WAIT` | what kind of moment the offer is for; the terminal wait is always `WAIT` |
+| Available seconds | `19` | estimated whole seconds left in the wait, so the server can pick a video that fits. Sent only in panel mode with `devads.sponsorship.video.enabled` on, and only for a command this machine has seen finish before |
 | Interaction type | `OFFER_SKIPPED` / `OFFER_OPENED` / `OFFER_INTERACTED` / `OFFER_COMPLETED` | only after an explicit click |
 | Developer id | opaque id | only when you run **DevAds: Show Reward Wallet** |
 
 No language, runtime, platform or command name is sent with offer
 requests.
+
+To estimate available seconds, the extension keeps a local history of how
+long recent commands took, in VS Code's workspace storage on your machine:
+each command is stored only as a SHA-256 hash of its normalized text (at
+most 200 commands, 5 durations each). The history is never sent; only the
+resulting number of seconds is. Turning video off
+(`devads.sponsorship.video.enabled`) or using `statusBar` presentation
+stops both the estimate and the recording.
+
+When you open one of DevAds' own beta offers, the page URL on the DevAds
+site carries the offer's display id, your session id and the minimum time
+on the page, so the site can verify that exact offer. Third-party links are
+opened exactly as the sponsor provided them, with no DevAds ids added.
 
 ## What is never collected
 

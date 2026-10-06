@@ -175,7 +175,7 @@ export default function DashboardPage() {
           Enable DevAds in VS Code
         </label>
         <p className="text-xs text-muted">
-          Fine-grained settings (minimum wait seconds, categories, video ads, frequency cap) live in
+          Editor settings (minimum wait seconds, panel or status bar presentation, video offers) live in
           the VS Code extension settings &mdash; search &quot;DevAds&quot; in your editor settings.
         </p>
       </section>

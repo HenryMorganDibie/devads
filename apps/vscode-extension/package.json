@@ -1,7 +1,7 @@
 {
   "name": "devads",
   "displayName": "DevAds",
-  "description": "Turn developer wait time into value. Sponsored cards during builds, installs, and tests you were already waiting on -- never before, never longer.",
+  "description": "DevAds sponsorship for VS Code: opt-in, clearly labelled sponsored offers in a DevAds-owned panel beside your editor (cards and short muted videos) while builds, installs and tests run, with server-verified rewards. Never inside your code, terminal output, prompts or AI conversations.",
   "version": "0.1.0",
   "homepage": "https://devads-app.vercel.app",
   "publisher": "devads",
@@ -38,7 +38,7 @@
         "devads.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show sponsored cards during long-running terminal commands."
+          "description": "Master switch for DevAds: sponsored cards and sponsored offers during long-running terminal commands. When off, nothing is requested or shown."
         },
         "devads.minimumWaitSeconds": {
           "type": "number",
@@ -49,19 +49,20 @@
         "devads.videoAdsEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Allow video creatives. (v1 status bar surface renders image/card creatives only; this is reserved for future richer surfaces.)"
+          "description": "Not used. Video offers are controlled by devads.sponsorship.video.enabled.",
+          "deprecationMessage": "Not used. Video offers are controlled by devads.sponsorship.video.enabled."
         },
         "devads.categories": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Only show ads from these categories. Leave empty to allow all categories."
+          "description": "Not applied yet: the extension does not send this setting. Category preferences are stored on your DevAds account and enforced by the server."
         },
         "devads.categoriesOptOut": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Never show ads from these categories."
+          "description": "Not applied yet: the extension does not send this setting. Category opt-outs are stored on your DevAds account and enforced by the server."
         },
         "devads.adServerUrl": {
           "type": "string",

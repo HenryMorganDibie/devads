@@ -31,13 +31,16 @@ sponsor campaign -> developer engagement -> verified outcome -> developer reward
   charge and the developer's reward independently, and the fee is the
   difference.
 
-### The first use case: wait-time sponsored cards in VS Code
+### The first use case: sponsorship during waits in VS Code
 
-The first product built on this infrastructure is the VS Code extension. It
-shows a small sponsored card only while a build, install or test the
-developer is already waiting on is still running, never before and never
-longer, and can also show reward-carrying sponsored offers. It is the first
-client of the platform, not its definition.
+The first client built on this infrastructure is the VS Code extension. While
+a build, install or test the developer is already waiting on is still
+running, never before and never longer, it can present a reward-carrying
+sponsored offer in the DevAds panel, a DevAds-owned tab beside the editor:
+as a card, or as a short muted video when one fits the time left. The
+status bar is its compact mode and fallback, and it also carries standard
+CPM sponsored cards. A wait is the first qualifying interaction DevAds
+supports, not its definition.
 
 ```
 $ npm run build
@@ -52,16 +55,16 @@ $ npm run build
   build complete ✓
 ```
 
-*(Static mockup of the VS Code status-bar card -- a real recording is on
-the list; see the note in [docs/developer-guide.md](./docs/developer-guide.md).)*
+*(Static mockup of a standard status-bar card. Sponsored offers open in the
+DevAds panel instead; see [docs/developer-guide.md](./docs/developer-guide.md).)*
 
 ## Status
 
 | | What |
 | --- | --- |
-| **Developer beta** | Public and usable: GitHub or Google sign-in, beta onboarding, a developer dashboard, and a DevAds-funded beta campaign whose Beta Credits are verified on the server and recorded in the wallet. There are no external sponsors yet ([docs/developer-beta.md](./docs/developer-beta.md)) |
+| **Developer beta** | Public and usable: GitHub or Google sign-in, beta onboarding, a developer dashboard, and DevAds-funded first-party beta campaigns (a walkthrough card plus four product video campaigns) whose Beta Credits are verified on the server and recorded in the wallet. There are no external sponsors yet ([docs/developer-beta.md](./docs/developer-beta.md)) |
 | **Implemented** | Sponsorship campaigns with sponsor and admin review; server-side offer selection, targeting, budgets, caps and verification; idempotent sponsor charges in integer cents; reward ledger and developer wallet; `@devads/ad-sdk` protocol SDK and adapter runtime; sponsor, admin and developer dashboards; the VS Code extension and the DevAds web app (the two clients), including wait-time sponsored cards with CPM campaigns, developer earnings and payouts |
-| **Early** | Reward redemption, fulfilled by an operator ([docs/redemption.md](./docs/redemption.md)); Stripe billing and payouts, intended for test-mode keys and only used when configured; the hosted public API (the site is live, the API is not yet) |
+| **Early** | Reward redemption, fulfilled by an operator ([docs/redemption.md](./docs/redemption.md)); Stripe billing and payouts, intended for test-mode keys and only used when configured; the hosted API (live at `devads-api.vercel.app`; no public API keys for third parties yet) |
 | **Planned** | Adapters for AI coding agents, CLIs and other IDEs ([docs/adapters.md](./docs/adapters.md) lists what each would legitimately require); automated fraud detection and reward reversals; automatic delivery of more reward types |
 | **Partnerships** | **None.** DevAds has no partnership with Anthropic, OpenAI, Google, Cursor or any other AI or developer-tool company, and none is needed: the whole loop runs on infrastructure DevAds controls. Client types such as `CLAUDE_CODE` or `CURSOR` are labels a sponsor may target, not integrations. |
 
@@ -282,11 +285,13 @@ No source code. No prompts. No model responses. No secrets. DevAds never
 reads files, inspects other processes, intercepts prompts, captures model
 output, extracts credentials or relies on undocumented provider APIs. The
 VS Code client learns that a terminal command started and ended through
-VS Code's public shell-integration events, and keeps only the command's
-first word (for example `npm`). Sponsorship requests
-carry only coarse, allowlisted metadata about the interaction (client type,
-version, server-issued ids, interaction type), and the SDK's public types
-have no field for anything else.
+VS Code's public shell-integration events. It sends at most the command's
+first word (for example `npm`), and keeps a local-only history of how long
+commands took, stored as hashes, to estimate whether a video fits. Sponsorship
+requests carry only coarse, allowlisted metadata about the interaction
+(client type, version, server-issued ids, interaction kind and, for video,
+the estimated seconds left), and the SDK's public types have no field for
+anything else.
 
 For wait-time cards, strict allowlist telemetry only: detected language/runtime/platform and the
 *name* of the command (e.g. `npm`, never full arguments). Never source
@@ -478,9 +483,10 @@ Next, in rough order:
   per-developer caps and ownership checks).
 - **Rewards:** automatic delivery for more reward types (today: redemption
   is operator-fulfilled; see [docs/redemption.md](./docs/redemption.md)).
-- **Payments:** live Stripe billing and payouts, and a hosted public API.
-- **Wait-time cards:** CLI, JetBrains and browser clients, and video
-  creatives. Detail: [docs/architecture.md](./docs/architecture.md#roadmap).
+- **Payments:** live Stripe billing and payouts.
+- **Standard CPM cards:** CLI, JetBrains and browser clients, and video for
+  CPM creatives (sponsorship offers already play video in the DevAds panel).
+  Detail: [docs/architecture.md](./docs/architecture.md#roadmap).
 
 ## License
 

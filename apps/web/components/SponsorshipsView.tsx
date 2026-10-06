@@ -204,8 +204,10 @@ export function SponsorshipsView({
           <li>
             <span className="font-medium">VS Code extension.</span>{" "}
             <span className="text-muted">
-              During a long-running terminal command, a status bar item labelled &quot;Sponsored&quot;
-              shows the offer and its reward. Sign in with <span className="font-mono">DevAds: Sign In</span>{" "}
+              During a long-running terminal command, the offer and its reward open in the DevAds panel
+              beside your editor, as a card or a short muted video, labelled &quot;Sponsored&quot; (or
+              &quot;DevAds Beta &middot; First-party&quot; for DevAds&apos; own campaigns). The status bar is the
+              compact alternative. Sign in with <span className="font-mono">DevAds: Sign In</span>{" "}
               and keep <span className="font-mono">devads.sponsorship.enabled</span> on. Opening an offer
               is always your choice, and skipping it costs nothing.
             </span>

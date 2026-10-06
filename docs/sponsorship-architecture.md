@@ -717,7 +717,7 @@ named, recorded dimension instead.
 | Kind | Meaning | Status |
 | --- | --- | --- |
 | `WAIT` | The developer is waiting on something the client observes. | **The only kind with real behavior.** The VS Code terminal-wait flow sends it explicitly. Also the server default. |
-| `DEVELOPER_INITIATED` | The developer explicitly asked to see an opportunity; not gated on a wait. | Placeholder. Accepted and recorded; no client sends it yet. |
+| `DEVELOPER_INITIATED` | The developer explicitly asked to see an opportunity; not gated on a wait. | Sent by the web dashboard when the developer opens an opportunity there. Recorded; it reports no available seconds, so it is only ever served CARD offers. |
 | `OTHER` | Extensible catch-all for future kinds (build complete, tool discovery, project creation, ...). | Placeholder. None of those are implemented. |
 
 Where it lives:
@@ -760,8 +760,9 @@ kind, rather than as wait-specific APIs.
 Not done here, deliberately:
 
 - **No new interaction kinds have behavior.** Build-complete, tool-discovery
-  and project-creation triggers are future work. The video-creative work is
-  to be rebased onto this abstraction first.
+  and project-creation triggers are future work. The video-creative work has
+  since been rebuilt on this abstraction (see "Presentation modes, creatives
+  and available seconds" below).
 - **The web beta originally sent no kind,** so its developer-initiated
   requests were recorded as `WAIT` by the server default. That one-line
   follow-up has since landed: `apps/web/lib/betaOffer.ts` now sends
@@ -902,11 +903,13 @@ presentation mode, and the status bar is the compact mode and the fallback
   extension also reports no available seconds then, so the request is the
   CARD-only one it always was.
 - **`WebviewOfferPanel`** (`offerPanel.ts`) opens beside the editor with
-  `preserveFocus`, loads no local resources, and accepts only `open`, `skip`
-  and `mediaError` messages, acting only on the offer it currently renders.
-  When the offer goes away (wait ended, skipped, opened) it closes, unless it
-  is the tab the developer is looking at: then it shows an empty state instead
-  of disappearing under them.
+  `preserveFocus`, loads no local resources, and accepts only `open`, `skip`,
+  `mediaError` and `engaged` messages, acting only on the offer it currently
+  renders. When the offer goes away (wait ended, skipped, opened) it closes,
+  unless the developer has focused or clicked inside it since the offer was
+  shown (the page posts `engaged`): then it shows an empty state instead of
+  disappearing under them. `panel.active` alone is not used for this, because
+  it is also true whenever the panel is the only editor, with focus elsewhere.
 - **`offerPanelView.ts`** renders every state with one security posture
   (the branch's video view, generalized): CSP `default-src 'none'`,
   nonce-only inline style/script, media and images only from the creative's

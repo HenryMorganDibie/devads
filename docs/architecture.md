@@ -107,12 +107,15 @@ than double-counted.
   the spec explicitly says don't build every client in v1. The ad-server's
   API is client-agnostic already; a CLI would reuse `adClient.ts`'s shape
   almost as-is.
-- **Video ads in the extension**: the backend/dashboards support the VIDEO
-  creative type end-to-end, but the v1 StatusBarItem surface can only render
-  text -- VS Code's UX guidance discourages a webview for promotional
-  content, and a webview was the only way to autoplay video. Left for a
-  richer future surface (e.g. a notification/panel API if VS Code adds one
-  suited to this).
+- **Video for standard CPM cards**: the standard card is still a text-only
+  StatusBarItem, so a VIDEO creative on a CPM campaign is never rendered.
+  Video does ship for *sponsorship offers*: the extension presents them in
+  the DevAds panel, a DevAds-owned webview beside the editor that plays a
+  muted creative only when one fits the time left in the wait, with the
+  status bar as compact mode and fallback. See "Presentation modes,
+  creatives and available seconds" in
+  [sponsorship-architecture.md](./sponsorship-architecture.md) and
+  [beta-video-ads.md](./beta-video-ads.md).
 - **Real S3/Stripe**: `PayoutProvider`/`BillingProvider` are real Stripe SDK
   implementations gated behind env vars (`PAYOUT_PROVIDER=stripe` +
   `STRIPE_SECRET_KEY`), defaulting to a deterministic `Mock` implementation.
@@ -125,8 +128,10 @@ than double-counted.
   the bucket and returns a storage key, and `GET /api/v1/creatives/:id/url`
   resolves a time-limited signed URL for rendering it -- verified with a
   real upload -> signed-URL -> download round-trip against a live MinIO.
-  Video upload isn't wired into the UI (the VIDEO creative type and
-  storage path exist, but no client renders video yet).
+  Video upload isn't wired into the advertiser UI for CPM campaigns (the
+  VIDEO creative type and storage path exist, but the standard card does not
+  render video). Sponsorship video creatives are separate `OfferCreative`
+  rows, added by the seed or an operator.
 - **Automated fraud anomaly detection** (velocity/device-fingerprint
   scoring beyond min-view-duration + idempotency + frequency caps): the
   `fraud_flags` table and admin review UI hook exist; the detection rules

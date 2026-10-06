@@ -106,8 +106,9 @@ tied to waits as such.
    panel: a webview beside the editor that opens without taking focus. A
    video starts muted, plays only https media under a strict CSP, shows a
    loading state until the first frame and an inline error (keeping the
-   offer usable) if it cannot play, and the panel closes when the command
-   finishes. The status bar item is the compact mode and the fallback when
+   offer usable) if it cannot play, and the video stops when the command
+   finishes (the panel closes, or shows an empty state if the developer has
+   clicked into it). The status bar item is the compact mode and the fallback when
    the panel is unavailable.
 
 An offer's CTA may contain `{displayEventId}`, which the server replaces

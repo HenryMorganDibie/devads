@@ -24,10 +24,12 @@ target by language, framework, runtime, platform, and country.
    URL, and (optional) an image -- PNG/JPEG/WebP/GIF up to 5MB. Uploaded
    images are validated server-side (MIME type + size, never trusted from
    the browser) and stored in object storage; the dashboard shows a live
-   preview before you submit. Video upload isn't wired into the UI yet
-   (the VIDEO creative type and its storage path exist end to end, but the
-   v1 VS Code status-bar surface only renders text/image content anyway --
-   see [architecture.md](./architecture.md#roadmap)).
+   preview before you submit. Video upload isn't wired into the UI for
+   CPM campaigns (the VIDEO creative type and its storage path exist end to
+   end, but the standard card is a text-only status bar item -- see
+   [architecture.md](./architecture.md#roadmap)). Video is available for
+   sponsorship offers, presented in the extension's DevAds panel; see
+   [beta-video-ads.md](./beta-video-ads.md).
 4. Submit. Your campaign moves to **Submitted** and enters the admin review
    queue.
 
