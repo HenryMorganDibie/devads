@@ -120,9 +120,14 @@ ${opts.script ? `<script nonce="${opts.nonce}">\n${opts.script}\n</script>` : ""
 </html>`;
 }
 
+// "engaged" tells the extension the developer is actually reading the panel
+// (focused or clicked it), so it is not closed under them when the offer ends.
 const ACTIONS_SCRIPT = `  const vscode = acquireVsCodeApi();
   document.getElementById("open").addEventListener("click", () => vscode.postMessage({ type: "open" }));
-  document.getElementById("skip").addEventListener("click", () => vscode.postMessage({ type: "skip" }));`;
+  document.getElementById("skip").addEventListener("click", () => vscode.postMessage({ type: "skip" }));
+  const engaged = () => vscode.postMessage({ type: "engaged" });
+  window.addEventListener("focus", engaged);
+  document.addEventListener("pointerdown", engaged);`;
 
 // Loading -> playing, or -> an inline error that keeps the offer usable. A
 // <source> fires "error" when it fails; the last one failing means none can play.

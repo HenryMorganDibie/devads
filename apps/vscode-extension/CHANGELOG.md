@@ -14,6 +14,12 @@ polls immediately instead of waiting for the pairing toast to be clicked; and
 opening a DevAds beta offer passes its display id to the walkthrough so the
 offer can be completed and rewarded.
 
+Panel and safety fixes: the DevAds panel now closes when its offer ends
+unless the developer has clicked or focused inside it (it previously stayed
+open as an empty tab whenever it was the only editor), and the standard
+sponsored card's tooltip escapes sponsor text and trusts only its own two
+commands.
+
 ## 0.1.0
 
 Initial MVP: terminal command detection via shell integration, status-bar

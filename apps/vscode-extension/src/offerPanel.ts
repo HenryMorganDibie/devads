@@ -21,13 +21,16 @@ const VIEW_TYPE = "devads.offerPanel";
  * choice; everything else (events, completion, rewards) stays in the SDK
  * runtime via SponsoredOfferController.
  *
- * Only three messages are accepted from the page ("open", "skip",
- * "mediaError"), and Open / Skip act only on the offer currently rendered.
+ * Only four messages are accepted from the page ("open", "skip",
+ * "mediaError", "engaged"), and Open / Skip act only on the offer currently
+ * rendered.
  */
 export class WebviewOfferPanel implements OfferPanelSurface {
   private readonly panel: vscode.WebviewPanel;
   private offer: SponsoredOpportunity | null = null;
   private disposedByUs = false;
+  /** The developer focused or clicked inside the panel since the current offer was shown. */
+  private engaged = false;
 
   constructor(private readonly actions: OfferPanelActions, events: OfferPanelEvents) {
     this.panel = vscode.window.createWebviewPanel(
@@ -48,6 +51,7 @@ export class WebviewOfferPanel implements OfferPanelSurface {
   show(offer: SponsoredOpportunity, opts: { videoAllowed: boolean }): void {
     const html = renderOfferPanelHtml({ status: "offer", offer, videoAllowed: opts.videoAllowed }, nonce(), this.panel.webview.cspSource);
     this.offer = offer;
+    this.engaged = false;
     this.panel.title = attributionLabel(offer);
     this.panel.webview.html = html;
     if (!this.panel.visible) this.panel.reveal(vscode.ViewColumn.Beside, true);
@@ -57,7 +61,9 @@ export class WebviewOfferPanel implements OfferPanelSurface {
     this.offer = null;
     // Don't yank away the tab the developer is reading: show the empty state
     // there instead and let them close it. Otherwise close the panel.
-    if (this.panel.active) {
+    // "Reading" means they focused or clicked inside it: panel.active alone is
+    // also true whenever it is the only editor, even with focus in the terminal.
+    if (this.panel.active && this.engaged) {
       this.panel.title = "DevAds";
       this.panel.webview.html = renderOfferPanelHtml({ status: "empty" }, nonce(), this.panel.webview.cspSource);
       return true;
@@ -75,6 +81,10 @@ export class WebviewOfferPanel implements OfferPanelSurface {
   private onMessage(msg: unknown): void {
     const type = typeof msg === "object" && msg !== null ? (msg as { type?: unknown }).type : undefined;
     const offer = this.offer;
+    if (type === "engaged") {
+      this.engaged = true;
+      return;
+    }
     if (type === "mediaError") {
       this.actions.log?.("sponsored video could not load; the panel shows the offer without it");
       return;
