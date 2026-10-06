@@ -11,12 +11,17 @@
 
 ## Install
 
-1. `npm run package -w @devads/vscode-extension` to build `devads-0.1.0.vsix`
-   (or download it from a release once published to the Marketplace).
+1. `npm run package -w devads` to build `apps/vscode-extension/devads-0.1.0.vsix`
+   (or download it from the DevAds dashboard at `/app`).
 2. In VS Code: **Extensions → ... → Install from VSIX**, select the file.
 3. Run **DevAds: Sign In** from the command palette. You'll see a short code
    and a link -- open it, sign in (or create an account) on the DevAds web
    app, and enter the code to approve the connection.
+
+The extension uses the production API (`https://devads-api.vercel.app`) and
+site (`https://devads-app.vercel.app`) by default. For a local stack, set
+`devads.adServerUrl` to `http://localhost:4000` and `devads.webAppUrl` to
+`http://localhost:3000` in VS Code settings.
 
 ## What you'll see
 

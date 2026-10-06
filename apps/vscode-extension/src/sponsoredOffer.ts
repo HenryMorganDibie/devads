@@ -1,4 +1,9 @@
-import { SponsoredOfferRuntime, type SessionProvider, type SponsoredOpportunity } from "@devads/ad-sdk";
+import {
+  firstPartyOfferUrl,
+  SponsoredOfferRuntime,
+  type SessionProvider,
+  type SponsoredOpportunity,
+} from "@devads/ad-sdk";
 import { isEligibleForAdRequest } from "./eligibility";
 import type { SponsorshipApi } from "./sponsorshipClient";
 
@@ -49,6 +54,11 @@ export interface SponsoredOfferDeps {
   openExternal: (url: string) => Promise<boolean>;
   /** User-facing, non-modal notice (reward earned). */
   notify?: (message: string) => void;
+  /**
+   * Origin of the DevAds web app (devads.webAppUrl). A CTA on this origin is
+   * DevAds' own walkthrough, which needs the display id to verify completion.
+   */
+  getFirstPartyOrigin?: () => string | undefined;
   log?: (message: string) => void;
 }
 
@@ -140,6 +150,16 @@ export class SponsoredOfferController {
    * act on the offer it was showing.
    */
   open(offer: SponsoredOpportunity | null = this.getCurrent()): Promise<void> {
-    return this.runtime.open(offer);
+    return this.runtime.open(offer && this.withFirstPartyLink(offer));
+  }
+
+  /**
+   * DevAds' own walkthrough completes the offer in the browser, so it must
+   * know which display it is for; without the ids it cannot verify anything.
+   * Third-party CTAs are opened exactly as the server sent them.
+   */
+  private withFirstPartyLink(offer: SponsoredOpportunity): SponsoredOpportunity {
+    const url = firstPartyOfferUrl(offer, this.deps.getFirstPartyOrigin?.(), this.deps.session.currentSessionId());
+    return url ? { ...offer, ctaUrl: url.toString() } : offer;
   }
 }

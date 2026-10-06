@@ -18,6 +18,10 @@ import {
 import { loadWallet } from "./rewardWallet";
 
 const POLL_INTERVAL_MS = 1000;
+// Production endpoints; must match the defaults in package.json. Local
+// development overrides them with devads.adServerUrl / devads.webAppUrl.
+const DEFAULT_AD_SERVER_URL = "https://devads-api.vercel.app";
+const DEFAULT_WEB_APP_URL = "https://devads-app.vercel.app";
 const INSTALLATION_ID_KEY = "devads.installationId";
 
 // Held at module scope only so deactivate() can end the sponsorship session.
@@ -28,8 +32,8 @@ function readConfig() {
   return {
     enabled: cfg.get<boolean>("enabled", true),
     minimumWaitSeconds: cfg.get<number>("minimumWaitSeconds", 8),
-    adServerUrl: cfg.get<string>("adServerUrl", "http://localhost:4000"),
-    webAppUrl: cfg.get<string>("webAppUrl", "http://localhost:3000"),
+    adServerUrl: cfg.get<string>("adServerUrl", DEFAULT_AD_SERVER_URL),
+    webAppUrl: cfg.get<string>("webAppUrl", DEFAULT_WEB_APP_URL),
     telemetryEnabled: cfg.get<boolean>("telemetryEnabled", true),
     sponsorshipEnabled: cfg.get<boolean>("sponsorship.enabled", true),
   };
@@ -75,6 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
     view: sponsoredOfferView,
     openExternal: async (url) => vscode.env.openExternal(vscode.Uri.parse(url)),
     notify: (message) => void vscode.window.showInformationMessage(message),
+    getFirstPartyOrigin: () => readConfig().webAppUrl,
     log,
   });
 
